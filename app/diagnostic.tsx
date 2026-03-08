@@ -21,11 +21,15 @@ interface Question {
   subject: "maths" | "english";
   grade: string;
   topic: string;
+  subtopic?: string;
+  difficulty?: string;
   question: string;
   options: string[];
   correctIndex: number;
   explanation: string;
 }
+
+const LETTER = ["A", "B", "C", "D"];
 
 function pickDiagnosticQuestions(grade: string): Question[] {
   const all = questionsData as Question[];
@@ -34,16 +38,46 @@ function pickDiagnosticQuestions(grade: string): Question[] {
   const english = gradeQs.filter((q) => q.subject === "english");
 
   function pick(arr: Question[], n: number, subject: "maths" | "english"): Question[] {
-    const source = arr.length >= n ? arr : (all.filter((q) => q.subject === subject));
+    const source = arr.length >= n ? arr : all.filter((q) => q.subject === subject);
     return [...source].sort(() => Math.random() - 0.5).slice(0, n);
   }
-
   return [...pick(maths, 5, "maths"), ...pick(english, 5, "english")].sort(() => Math.random() - 0.5);
 }
 
 type Phase = "intro" | "quiz" | "done";
+type AnswerState = "unanswered" | "wrong" | "retry_correct" | "retry_wrong_again" | "correct_first";
 
-const LETTER = ["A", "B", "C", "D"];
+function ExplanationSteps({ text }: { text: string }) {
+  const steps = text.split("\n").filter((s) => s.trim().length > 0);
+  return (
+    <View style={explainSt.wrap}>
+      {steps.map((step, i) => {
+        const isCheck = step.startsWith("✓");
+        return (
+          <View key={i} style={[explainSt.step, isCheck && explainSt.checkStep]}>
+            {isCheck ? (
+              <Ionicons name="checkmark-circle" size={16} color={Colors.light.sage} style={{ marginTop: 2 }} />
+            ) : (
+              <View style={[explainSt.dot, { backgroundColor: OPTION_COLORS[i % 4] }]} />
+            )}
+            <Text style={[explainSt.stepText, isCheck && explainSt.checkText]}>
+              {step.replace(/^✓\s*/, "")}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+const explainSt = StyleSheet.create({
+  wrap: { gap: 10 },
+  step: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
+  checkStep: {},
+  dot: { width: 8, height: 8, borderRadius: 4, marginTop: 7, flexShrink: 0 },
+  stepText: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 14, color: Colors.light.text, lineHeight: 21 },
+  checkText: { color: Colors.light.sage, fontFamily: "Inter_500Medium" },
+});
 
 export default function DiagnosticScreen() {
   const insets = useSafeAreaInsets();
@@ -55,43 +89,67 @@ export default function DiagnosticScreen() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [current, setCurrent] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
-  const [revealed, setRevealed] = useState(false);
+  const [retrySelected, setRetrySelected] = useState<number | null>(null);
+  const [answerState, setAnswerState] = useState<AnswerState>("unanswered");
   const [answers, setAnswers] = useState<{ correct: boolean; subject: "maths" | "english" }[]>([]);
   const [saving, setSaving] = useState(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
+  const explainFade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (profile) setQuestions(pickDiagnosticQuestions(profile.grade));
   }, [profile]);
 
-  function animateNext() {
-    Animated.sequence([
-      Animated.timing(slideAnim, { toValue: 30, duration: 120, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
-    ]).start();
+  function animateExplain() {
+    explainFade.setValue(0);
+    Animated.timing(explainFade, { toValue: 1, duration: 350, useNativeDriver: true }).start();
   }
 
-  function handleSelect(idx: number) {
-    if (revealed) return;
+  function handleFirstSelect(idx: number) {
+    if (answerState !== "unanswered") return;
     Haptics.selectionAsync();
-    setSelected(idx);
-    setRevealed(true);
     const q = questions[current];
-    setAnswers((prev) => [...prev, { correct: idx === q.correctIndex, subject: q.subject }]);
+    const isCorrect = idx === q.correctIndex;
+    setSelected(idx);
+    if (isCorrect) {
+      setAnswerState("correct_first");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setAnswers((prev) => [...prev, { correct: true, subject: q.subject }]);
+    } else {
+      setAnswerState("wrong");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      setAnswers((prev) => [...prev, { correct: false, subject: q.subject }]);
+    }
+    animateExplain();
+  }
+
+  function handleRetry(idx: number) {
+    const q = questions[current];
+    if (idx === selected) return; // can't pick the same wrong one again
+    Haptics.selectionAsync();
+    setRetrySelected(idx);
+    if (idx === q.correctIndex) {
+      setAnswerState("retry_correct");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else {
+      setAnswerState("retry_wrong_again");
+    }
   }
 
   function handleNext() {
     Haptics.selectionAsync();
-    animateNext();
-    if (current + 1 >= questions.length) {
-      finishDiagnostic();
-    } else {
-      setTimeout(() => {
+    Animated.timing(slideAnim, { toValue: -20, duration: 120, useNativeDriver: true }).start(() => {
+      slideAnim.setValue(20);
+      if (current + 1 >= questions.length) {
+        finishDiagnostic();
+      } else {
         setCurrent((c) => c + 1);
         setSelected(null);
-        setRevealed(false);
-      }, 120);
-    }
+        setRetrySelected(null);
+        setAnswerState("unanswered");
+        Animated.timing(slideAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+      }
+    });
   }
 
   async function finishDiagnostic() {
@@ -125,7 +183,7 @@ export default function DiagnosticScreen() {
           {[
             { icon: "help-circle", color: Colors.light.optionB, text: "10 questions — Maths & English" },
             { icon: "time", color: Colors.light.optionC, text: "Takes about 5–8 minutes" },
-            { icon: "star", color: Colors.light.gold, text: "No pressure — just do your best!" },
+            { icon: "star", color: Colors.light.gold, text: "Wrong answers show a full explanation" },
           ].map((item) => (
             <View key={item.text} style={[styles.infoCard, { borderLeftColor: item.color }]}>
               <Ionicons name={item.icon as any} size={22} color={item.color} />
@@ -147,11 +205,10 @@ export default function DiagnosticScreen() {
     const engCorrect = answers.filter((a) => a.correct && a.subject === "english").length;
     const mathsTotal = answers.filter((a) => a.subject === "maths").length;
     const engTotal = answers.filter((a) => a.subject === "english").length;
-
     return (
       <View style={[styles.doneContainer, { paddingTop: topPad }]}>
         <View style={styles.doneHeader}>
-          <View style={[styles.introIconWrap, { backgroundColor: Colors.light.sage }]}>
+          <View style={[styles.introIconWrap, { backgroundColor: "rgba(255,255,255,0.25)" }]}>
             <Ionicons name="checkmark-circle" size={52} color="#fff" />
           </View>
           <Text style={styles.introTitle}>Well done, {profile?.name}!</Text>
@@ -159,31 +216,27 @@ export default function DiagnosticScreen() {
         </View>
         <ScrollView contentContainerStyle={[styles.introCards, { paddingBottom: bottomPad + 16 }]}>
           <View style={styles.scoreCard}>
-            <View style={styles.scoreRow}>
-              <View style={[styles.subjectBadge, { backgroundColor: Colors.light.optionB }]}>
-                <Text style={styles.subjectBadgeTxt}>Maths</Text>
+            {[
+              { label: "Maths", correct: mathsCorrect, total: mathsTotal, color: Colors.light.optionB },
+              { label: "English", correct: engCorrect, total: engTotal, color: Colors.light.rust },
+            ].map((d) => (
+              <View key={d.label} style={styles.scoreRow}>
+                <View style={[styles.subjectBadge, { backgroundColor: d.color }]}>
+                  <Text style={styles.subjectBadgeTxt}>{d.label}</Text>
+                </View>
+                <View style={styles.scoreBarWrap}>
+                  <View style={[styles.scoreBar, { width: `${d.total > 0 ? (d.correct / d.total) * 100 : 0}%`, backgroundColor: d.color }]} />
+                </View>
+                <Text style={[styles.scoreFrac, { color: d.color }]}>{d.correct}/{d.total}</Text>
               </View>
-              <View style={styles.scoreBarWrap}>
-                <View style={[styles.scoreBar, { width: `${mathsTotal > 0 ? (mathsCorrect / mathsTotal) * 100 : 0}%`, backgroundColor: Colors.light.optionB }]} />
-              </View>
-              <Text style={styles.scoreFrac}>{mathsCorrect}/{mathsTotal}</Text>
-            </View>
-            <View style={styles.scoreRow}>
-              <View style={[styles.subjectBadge, { backgroundColor: Colors.light.rust }]}>
-                <Text style={styles.subjectBadgeTxt}>English</Text>
-              </View>
-              <View style={styles.scoreBarWrap}>
-                <View style={[styles.scoreBar, { width: `${engTotal > 0 ? (engCorrect / engTotal) * 100 : 0}%`, backgroundColor: Colors.light.rust }]} />
-              </View>
-              <Text style={styles.scoreFrac}>{engCorrect}/{engTotal}</Text>
-            </View>
+            ))}
           </View>
           <Text style={styles.doneMsg}>
             {correct >= 7
-              ? "Excellent! You have a strong foundation. We'll push you with higher-level challenges."
+              ? "Excellent! You have a strong foundation. We'll give you harder challenges."
               : correct >= 4
-              ? "Good start! We'll build on your strengths and strengthen your weak spots."
-              : "No worries at all! SomaLabs will guide you step-by-step from the basics."}
+              ? "Good start! We'll build on your strengths and strengthen weak spots."
+              : "No worries! SomaLabs will guide you step-by-step from the basics."}
           </Text>
           <TouchableOpacity
             style={styles.orangeBtn}
@@ -200,12 +253,20 @@ export default function DiagnosticScreen() {
 
   const q = questions[current];
   if (!q) return null;
+
+  const isWrong = answerState === "wrong";
+  const isCorrect = answerState === "correct_first";
+  const retryCorrect = answerState === "retry_correct";
+  const retryWrongAgain = answerState === "retry_wrong_again";
+  const showRetry = isWrong;
+  const showNext = isCorrect || retryCorrect || retryWrongAgain;
+  const revealed = answerState !== "unanswered";
+
   const progress = (current + 1) / questions.length;
   const subjectColor = q.subject === "maths" ? Colors.light.optionB : Colors.light.rust;
 
   return (
     <View style={[styles.quizRoot, { paddingTop: topPad }]}>
-      {/* Colored top strip */}
       <View style={[styles.quizTopBar, { backgroundColor: subjectColor }]}>
         <View style={styles.quizTopRow}>
           <View style={styles.qBadge}>
@@ -215,9 +276,8 @@ export default function DiagnosticScreen() {
             <Text style={styles.subjectTagTxt}>{q.subject === "maths" ? "Maths" : "English"}</Text>
           </View>
         </View>
-        {/* Progress track */}
         <View style={styles.progressTrack}>
-          <Animated.View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+          <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
         </View>
       </View>
 
@@ -225,75 +285,128 @@ export default function DiagnosticScreen() {
         contentContainerStyle={[styles.quizContent, { paddingBottom: bottomPad + 20 }]}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={{ transform: [{ translateY: slideAnim }] }}>
-          {/* Question card */}
+        <Animated.View style={{ transform: [{ translateY: slideAnim }], gap: 14 }}>
+          {/* Question */}
           <View style={styles.questionCard}>
+            {q.subtopic ? (
+              <Text style={styles.subtopicLabel}>{q.subtopic}</Text>
+            ) : null}
             <Text style={styles.questionText}>{q.question}</Text>
           </View>
 
-          {/* Options */}
+          {/* First-attempt options */}
           <View style={styles.optionsList}>
             {q.options.map((opt, i) => {
               const optColor = OPTION_COLORS[i];
               const isSelected = selected === i;
-              const isCorrect = i === q.correctIndex;
+              const isCorrAns = i === q.correctIndex;
 
               let bg = Colors.light.card;
               let borderColor = Colors.light.border;
               let labelBg = optColor;
               let textColor = Colors.light.text;
+              let disabled = revealed;
 
-              if (revealed) {
-                if (isCorrect) {
-                  bg = Colors.light.sageLight;
-                  borderColor = Colors.light.sage;
-                  labelBg = Colors.light.sage;
-                  textColor = "#1A5E35";
-                } else if (isSelected) {
-                  bg = Colors.light.rustLight;
-                  borderColor = Colors.light.rust;
-                  labelBg = Colors.light.rust;
-                  textColor = Colors.light.rust;
-                }
+              // In retry phase, disable the original wrong answer
+              if (showRetry) disabled = i === selected;
+
+              if (revealed && !showRetry) {
+                // Show correct/wrong after all done
+                if (isCorrAns) { bg = Colors.light.sageLight; borderColor = Colors.light.sage; labelBg = Colors.light.sage; textColor = "#1A5E35"; }
+                else if (isSelected && !isCorrAns) { bg = Colors.light.rustLight; borderColor = Colors.light.rust; labelBg = Colors.light.rust; textColor = Colors.light.rust; }
+              } else if (revealed && showRetry) {
+                // Dim the wrong answer that was selected
+                if (isSelected) { bg = "#F5F5F5"; borderColor = "#DDD"; labelBg = "#BBB"; textColor = "#AAA"; }
               } else if (isSelected) {
-                bg = optColor + "18";
-                borderColor = optColor;
+                bg = optColor + "18"; borderColor = optColor;
+              }
+
+              // After retry
+              if ((retryCorrect || retryWrongAgain) && retrySelected !== null) {
+                if (isCorrAns) { bg = Colors.light.sageLight; borderColor = Colors.light.sage; labelBg = Colors.light.sage; textColor = "#1A5E35"; }
+                else if (retrySelected === i && !isCorrAns) { bg = Colors.light.rustLight; borderColor = Colors.light.rust; labelBg = Colors.light.rust; textColor = Colors.light.rust; }
+                else if (isSelected && retrySelected !== i) { bg = "#F5F5F5"; borderColor = "#DDD"; labelBg = "#BBB"; textColor = "#AAA"; }
               }
 
               return (
                 <TouchableOpacity
                   key={i}
-                  style={[styles.optionBtn, { backgroundColor: bg, borderColor }]}
-                  onPress={() => handleSelect(i)}
-                  disabled={revealed}
-                  activeOpacity={0.78}
+                  style={[styles.optionBtn, { backgroundColor: bg, borderColor }, disabled && styles.optionDisabled]}
+                  onPress={() => showRetry && !disabled ? handleRetry(i) : !revealed ? handleFirstSelect(i) : undefined}
+                  disabled={disabled && !showRetry}
+                  activeOpacity={disabled ? 1 : 0.78}
                 >
                   <View style={[styles.optBadge, { backgroundColor: labelBg }]}>
                     <Text style={styles.optBadgeTxt}>{LETTER[i]}</Text>
                   </View>
                   <Text style={[styles.optText, { color: textColor }]}>{opt}</Text>
-                  {revealed && isCorrect && <Ionicons name="checkmark-circle" size={22} color={Colors.light.sage} />}
-                  {revealed && isSelected && !isCorrect && <Ionicons name="close-circle" size={22} color={Colors.light.rust} />}
+                  {(retryCorrect || (isCorrect && isCorrAns)) && isCorrAns && (
+                    <Ionicons name="checkmark-circle" size={22} color={Colors.light.sage} />
+                  )}
+                  {retryWrongAgain && retrySelected === i && !isCorrAns && (
+                    <Ionicons name="close-circle" size={22} color={Colors.light.rust} />
+                  )}
                 </TouchableOpacity>
               );
             })}
           </View>
 
-          {/* Explanation */}
+          {/* Explanation + interaction — animated in */}
           {revealed && (
-            <View style={styles.explainBox}>
-              <Ionicons name="bulb" size={18} color={Colors.light.gold} />
-              <Text style={styles.explainText}>{q.explanation}</Text>
-            </View>
-          )}
+            <Animated.View style={{ opacity: explainFade, gap: 14 }}>
+              {/* Wrong answer banner */}
+              {(isWrong || retryWrongAgain) && (
+                <View style={styles.wrongBanner}>
+                  <Ionicons name="close-circle" size={20} color={Colors.light.rust} />
+                  <Text style={styles.wrongBannerText}>
+                    {isWrong ? "Not quite — let's understand why!" : "Still incorrect — the correct answer is highlighted above."}
+                  </Text>
+                </View>
+              )}
+              {isCorrect && (
+                <View style={styles.correctBanner}>
+                  <Ionicons name="checkmark-circle" size={20} color={Colors.light.sage} />
+                  <Text style={styles.correctBannerText}>Correct! Well done!</Text>
+                </View>
+              )}
+              {retryCorrect && (
+                <View style={styles.correctBanner}>
+                  <Ionicons name="star" size={20} color={Colors.light.gold} />
+                  <Text style={styles.correctBannerText}>You've got it now! Great recovery!</Text>
+                </View>
+              )}
 
-          {revealed && (
-            <TouchableOpacity style={styles.orangeBtn} onPress={handleNext}>
-              <Text style={styles.orangeBtnText}>
-                {current + 1 >= questions.length ? "See My Results" : "Next Question"}
-              </Text>
-              <Ionicons name="arrow-forward" size={18} color="#fff" />
-            </TouchableOpacity>
+              {/* Explanation */}
+              <View style={styles.explainCard}>
+                <View style={styles.explainHeader}>
+                  <Ionicons name="bulb" size={18} color={Colors.light.gold} />
+                  <Text style={styles.explainTitle}>
+                    {isCorrect ? "Why this is correct" : "Here's how to solve it"}
+                  </Text>
+                </View>
+                <ExplanationSteps text={q.explanation} />
+              </View>
+
+              {/* Retry prompt */}
+              {showRetry && (
+                <View style={styles.retryPromptCard}>
+                  <Text style={styles.retryPromptTitle}>Now you try!</Text>
+                  <Text style={styles.retryPromptSub}>
+                    Tap the correct answer above to show you understand.
+                  </Text>
+                </View>
+              )}
+
+              {/* Next button */}
+              {showNext && (
+                <TouchableOpacity style={[styles.orangeBtn, { marginTop: 0 }]} onPress={handleNext}>
+                  <Text style={styles.orangeBtnText}>
+                    {current + 1 >= questions.length ? "See My Results" : "Next Question"}
+                  </Text>
+                  <Ionicons name="arrow-forward" size={18} color="#fff" />
+                </TouchableOpacity>
+              )}
+            </Animated.View>
           )}
         </Animated.View>
       </ScrollView>
@@ -304,181 +417,73 @@ export default function DiagnosticScreen() {
 const styles = StyleSheet.create({
   introContainer: { flex: 1, backgroundColor: Colors.light.optionB },
   doneContainer: { flex: 1, backgroundColor: Colors.light.sage },
-  introHeader: {
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 28,
-    gap: 10,
-  },
+  introHeader: { alignItems: "center", paddingHorizontal: 24, paddingTop: 24, paddingBottom: 28, gap: 10 },
   introIconWrap: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: 90, height: 90, borderRadius: 45,
     backgroundColor: "rgba(255,255,255,0.25)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 4,
+    justifyContent: "center", alignItems: "center", marginBottom: 4,
   },
-  introTitle: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 26,
-    color: "#fff",
-    textAlign: "center",
-  },
-  introSub: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 15,
-    color: "rgba(255,255,255,0.85)",
-    textAlign: "center",
-    lineHeight: 22,
-  },
-  introCards: {
-    backgroundColor: Colors.light.background,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 24,
-    gap: 14,
-    flexGrow: 1,
-  },
-  infoCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: Colors.light.card,
-    borderRadius: 14,
-    padding: 14,
-    borderLeftWidth: 4,
-  },
+  introTitle: { fontFamily: "Inter_700Bold", fontSize: 26, color: "#fff", textAlign: "center" },
+  introSub: { fontFamily: "Inter_400Regular", fontSize: 15, color: "rgba(255,255,255,0.85)", textAlign: "center", lineHeight: 22 },
+  introCards: { backgroundColor: Colors.light.background, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, gap: 14, flexGrow: 1 },
+  infoCard: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.light.card, borderRadius: 14, padding: 14, borderLeftWidth: 4 },
   infoText: { fontFamily: "Inter_500Medium", fontSize: 14, color: Colors.light.text, flex: 1 },
   orangeBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    backgroundColor: Colors.light.gold,
-    borderRadius: 18,
-    paddingVertical: 18,
-    marginTop: 4,
-    shadowColor: Colors.light.gold,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
+    backgroundColor: Colors.light.gold, borderRadius: 18, paddingVertical: 18,
+    shadowColor: Colors.light.gold, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6,
   },
   orangeBtnText: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#fff" },
-  doneHeader: {
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 28,
-    gap: 8,
-  },
-  doneScore: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 52,
-    color: "#fff",
-    lineHeight: 60,
-  },
-  doneMsg: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 15,
-    color: Colors.light.textSecondary,
-    textAlign: "center",
-    lineHeight: 22,
-  },
-  scoreCard: {
-    backgroundColor: Colors.light.card,
-    borderRadius: 20,
-    padding: 18,
-    gap: 14,
-  },
+  doneHeader: { alignItems: "center", paddingHorizontal: 24, paddingTop: 24, paddingBottom: 28, gap: 8 },
+  doneScore: { fontFamily: "Inter_700Bold", fontSize: 52, color: "#fff", lineHeight: 60 },
+  doneMsg: { fontFamily: "Inter_400Regular", fontSize: 15, color: Colors.light.textSecondary, textAlign: "center", lineHeight: 22 },
+  scoreCard: { backgroundColor: Colors.light.card, borderRadius: 20, padding: 18, gap: 14 },
   scoreRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  subjectBadge: {
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    width: 72,
-    alignItems: "center",
-  },
+  subjectBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, width: 72, alignItems: "center" },
   subjectBadgeTxt: { fontFamily: "Inter_700Bold", fontSize: 12, color: "#fff" },
   scoreBarWrap: { flex: 1, height: 8, backgroundColor: Colors.light.border, borderRadius: 4, overflow: "hidden" },
   scoreBar: { height: "100%", borderRadius: 4 },
-  scoreFrac: { fontFamily: "Inter_700Bold", fontSize: 14, color: Colors.light.navy, width: 30, textAlign: "right" },
+  scoreFrac: { fontFamily: "Inter_700Bold", fontSize: 14, width: 30, textAlign: "right" },
   quizRoot: { flex: 1, backgroundColor: Colors.light.background },
   quizTopBar: { paddingHorizontal: 16, paddingBottom: 14, paddingTop: 12, gap: 10 },
   quizTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  qBadge: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-  },
+  qBadge: { backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 5 },
   qBadgeTxt: { fontFamily: "Inter_700Bold", fontSize: 14, color: "#fff" },
-  subjectTag: {
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-  },
+  subjectTag: { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 5 },
   subjectTagTxt: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: "#fff" },
-  progressTrack: {
-    height: 8,
-    backgroundColor: "rgba(255,255,255,0.3)",
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: "#fff",
-    borderRadius: 4,
-  },
-  quizContent: { padding: 16, gap: 14 },
-  questionCard: {
-    backgroundColor: Colors.light.cream,
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 2,
-    borderColor: "#F0E8D8",
-  },
-  questionText: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 18,
-    color: Colors.light.navy,
-    lineHeight: 28,
-  },
+  progressTrack: { height: 8, backgroundColor: "rgba(255,255,255,0.3)", borderRadius: 4, overflow: "hidden" },
+  progressFill: { height: "100%", backgroundColor: "#fff", borderRadius: 4 },
+  quizContent: { padding: 16 },
+  questionCard: { backgroundColor: Colors.light.cream, borderRadius: 20, padding: 20, borderWidth: 2, borderColor: "#F0E8D8", gap: 6 },
+  subtopicLabel: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: Colors.light.gold, textTransform: "uppercase", letterSpacing: 1 },
+  questionText: { fontFamily: "Inter_600SemiBold", fontSize: 18, color: Colors.light.navy, lineHeight: 28 },
   optionsList: { gap: 10 },
-  optionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 2,
-    gap: 12,
-  },
-  optBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  optionBtn: { flexDirection: "row", alignItems: "center", borderRadius: 16, padding: 14, borderWidth: 2, gap: 12 },
+  optionDisabled: { opacity: 0.45 },
+  optBadge: { width: 34, height: 34, borderRadius: 10, justifyContent: "center", alignItems: "center" },
   optBadgeTxt: { fontFamily: "Inter_700Bold", fontSize: 15, color: "#fff" },
   optText: { flex: 1, fontFamily: "Inter_500Medium", fontSize: 15, lineHeight: 22 },
-  explainBox: {
-    flexDirection: "row",
-    gap: 10,
-    backgroundColor: Colors.light.goldLight,
-    borderRadius: 16,
-    padding: 14,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.light.gold,
-    alignItems: "flex-start",
+  wrongBanner: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: Colors.light.rustLight, borderRadius: 14, padding: 14,
+    borderLeftWidth: 4, borderLeftColor: Colors.light.rust,
   },
-  explainText: {
-    flex: 1,
-    fontFamily: "Inter_400Regular",
-    fontSize: 14,
-    color: Colors.light.text,
-    lineHeight: 21,
+  wrongBannerText: { flex: 1, fontFamily: "Inter_600SemiBold", fontSize: 14, color: Colors.light.rust },
+  correctBanner: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: Colors.light.sageLight, borderRadius: 14, padding: 14,
+    borderLeftWidth: 4, borderLeftColor: Colors.light.sage,
   },
+  correctBannerText: { flex: 1, fontFamily: "Inter_600SemiBold", fontSize: 14, color: Colors.light.sage },
+  explainCard: { backgroundColor: Colors.light.goldLight, borderRadius: 18, padding: 16, gap: 14, borderLeftWidth: 4, borderLeftColor: Colors.light.gold },
+  explainHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  explainTitle: { fontFamily: "Inter_700Bold", fontSize: 15, color: "#8B5E00" },
+  retryPromptCard: {
+    backgroundColor: Colors.light.optionB + "12",
+    borderRadius: 16, padding: 16,
+    borderWidth: 2, borderColor: Colors.light.optionB,
+    alignItems: "center", gap: 6,
+  },
+  retryPromptTitle: { fontFamily: "Inter_700Bold", fontSize: 17, color: Colors.light.optionB },
+  retryPromptSub: { fontFamily: "Inter_400Regular", fontSize: 14, color: Colors.light.textSecondary, textAlign: "center" },
 });
