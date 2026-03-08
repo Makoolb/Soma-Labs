@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Platform,
   ScrollView,
-  Dimensions,
   Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -17,19 +16,19 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp, type Grade, type Subject } from "@/context/AppContext";
 
-const { width } = Dimensions.get("window");
-
-const GRADES: { label: string; value: Grade; desc: string }[] = [
-  { label: "P4", value: "P4", desc: "Primary 4" },
-  { label: "P5", value: "P5", desc: "Primary 5" },
-  { label: "P6", value: "P6", desc: "Primary 6" },
+const GRADES: { label: string; value: Grade; desc: string; color: string }[] = [
+  { label: "P4", value: "P4", desc: "Primary 4", color: Colors.light.optionB },
+  { label: "P5", value: "P5", desc: "Primary 5", color: Colors.light.optionC },
+  { label: "P6", value: "P6", desc: "Primary 6", color: Colors.light.rust },
 ];
 
-const SUBJECTS: { label: string; value: Subject; desc: string; color: string }[] = [
-  { label: "Maths", value: "Maths", desc: "Numbers, shapes & problems", color: Colors.light.navy },
-  { label: "English", value: "English", desc: "Grammar, reading & writing", color: Colors.light.rust },
-  { label: "Both", value: "Both", desc: "Maths + English combined", color: Colors.light.sage },
+const SUBJECTS: { label: string; value: Subject; desc: string; color: string; icon: string }[] = [
+  { label: "Maths", value: "Maths", desc: "Numbers, shapes & problems", color: Colors.light.optionB, icon: "calculator" },
+  { label: "English", value: "English", desc: "Grammar, reading & writing", color: Colors.light.rust, icon: "book" },
+  { label: "Both", value: "Both", desc: "Maths + English combined", color: Colors.light.sage, icon: "school" },
 ];
+
+const STEP_COLORS = [Colors.light.navy, Colors.light.optionB, Colors.light.optionC, Colors.light.rust];
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
@@ -43,13 +42,14 @@ export default function OnboardingScreen() {
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
+  const headerColor = STEP_COLORS[step] ?? Colors.light.navy;
 
   function animateStep(next: number) {
     Animated.sequence([
-      Animated.timing(fadeAnim, { toValue: 0, duration: 120, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
       Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
     ]).start();
-    setTimeout(() => setStep(next), 120);
+    setTimeout(() => setStep(next), 100);
     Haptics.selectionAsync();
   }
 
@@ -61,46 +61,83 @@ export default function OnboardingScreen() {
     router.replace("/diagnostic");
   }
 
-  const totalSteps = 3;
-
   return (
-    <View style={[styles.root, { paddingTop: topPad, paddingBottom: bottomPad }]}>
-      {/* Progress bar */}
-      <View style={styles.progressRow}>
-        {Array.from({ length: totalSteps }).map((_, i) => (
-          <View
-            key={i}
-            style={[styles.progressBar, { flex: 1 }, step > i ? styles.progressDone : step === i ? styles.progressActive : styles.progressInactive]}
+    <View style={[styles.root, { paddingTop: topPad }]}>
+      {/* Colored header band */}
+      <View style={[styles.headerBand, { backgroundColor: headerColor }]}>
+        <View style={styles.progressDots}>
+          {[0, 1, 2, 3].map((i) => (
+            <View
+              key={i}
+              style={[
+                styles.dot,
+                step === i ? styles.dotActive : step > i ? styles.dotDone : styles.dotInactive,
+              ]}
+            />
+          ))}
+        </View>
+        {step > 0 && (
+          <TouchableOpacity style={styles.backBtn} onPress={() => animateStep(step - 1)}>
+            <Ionicons name="arrow-back" size={20} color="#fff" />
+          </TouchableOpacity>
+        )}
+        <View style={styles.headerIconWrap}>
+          <Ionicons
+            name={step === 0 ? "school" : step === 1 ? "person" : step === 2 ? "library" : "book"}
+            size={52}
+            color="rgba(255,255,255,0.9)"
           />
-        ))}
+        </View>
+        <Text style={styles.headerTitle}>
+          {step === 0 ? "SomaLabs" : step === 1 ? "Your Name" : step === 2 ? "Your Class" : "Your Subject"}
+        </Text>
+        <Text style={styles.headerSub}>
+          {step === 0
+            ? "Your Common Entrance tutor"
+            : step === 1
+            ? "What should we call you?"
+            : step === 2
+            ? "Which class are you in?"
+            : "What do you want to practise?"}
+        </Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Animated.View style={{ opacity: fadeAnim }}>
+      {/* White sheet */}
+      <ScrollView
+        style={styles.sheet}
+        contentContainerStyle={[styles.sheetContent, { paddingBottom: bottomPad + 20 }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Animated.View style={{ opacity: fadeAnim, gap: 16 }}>
           {step === 0 && (
-            <View style={styles.stepWrap}>
-              <View style={styles.logoMark}>
-                <Ionicons name="school" size={48} color={Colors.light.navy} />
-              </View>
-              <Text style={styles.headline}>Welcome to{"\n"}SomaLabs</Text>
-              <Text style={styles.body}>
-                Your personal Common Entrance tutor for Maths and English. Let's get you set up in just 3 steps.
+            <>
+              <Text style={styles.bodyText}>
+                SomaLabs gives Nigerian Primary 4–6 students daily Maths and English practice tailored to the Common Entrance Exam. Set up in just 3 steps!
               </Text>
-              <TouchableOpacity style={styles.primaryBtn} onPress={() => animateStep(1)}>
-                <Text style={styles.primaryBtnText}>Let's Begin</Text>
+              <View style={styles.featureList}>
+                {[
+                  { icon: "checkmark-circle", color: Colors.light.sage, text: "Questions matched to your class level" },
+                  { icon: "star", color: Colors.light.gold, text: "Earn XP and build streaks every day" },
+                  { icon: "bar-chart", color: Colors.light.optionB, text: "Track your progress topic by topic" },
+                ].map((f) => (
+                  <View key={f.text} style={[styles.featureRow, { borderLeftColor: f.color }]}>
+                    <Ionicons name={f.icon as any} size={20} color={f.color} />
+                    <Text style={styles.featureText}>{f.text}</Text>
+                  </View>
+                ))}
+              </View>
+              <TouchableOpacity style={[styles.bigBtn, { backgroundColor: headerColor }]} onPress={() => animateStep(1)}>
+                <Text style={styles.bigBtnTxt}>Let's Begin</Text>
                 <Ionicons name="arrow-forward" size={18} color="#fff" />
               </TouchableOpacity>
-            </View>
+            </>
           )}
 
           {step === 1 && (
-            <View style={styles.stepWrap}>
-              <Text style={styles.stepLabel}>Your name</Text>
-              <Text style={styles.headline}>What should{"\n"}we call you?</Text>
-              <Text style={styles.body}>Enter the student's first name so we can personalise the experience.</Text>
+            <>
               <TextInput
                 style={styles.input}
-                placeholder="First name"
+                placeholder="Enter first name"
                 placeholderTextColor={Colors.light.textTertiary}
                 value={name}
                 onChangeText={setName}
@@ -111,88 +148,81 @@ export default function OnboardingScreen() {
                 onSubmitEditing={() => name.trim() && animateStep(2)}
               />
               <TouchableOpacity
-                style={[styles.primaryBtn, !name.trim() && styles.btnDisabled]}
+                style={[styles.bigBtn, { backgroundColor: headerColor }, !name.trim() && styles.btnDisabled]}
                 onPress={() => name.trim() && animateStep(2)}
                 disabled={!name.trim()}
               >
-                <Text style={styles.primaryBtnText}>Continue</Text>
+                <Text style={styles.bigBtnTxt}>Continue</Text>
                 <Ionicons name="arrow-forward" size={18} color="#fff" />
               </TouchableOpacity>
-            </View>
+            </>
           )}
 
           {step === 2 && (
-            <View style={styles.stepWrap}>
-              <Text style={styles.stepLabel}>Class level</Text>
-              <Text style={styles.headline}>What class{"\n"}are you in?</Text>
-              <Text style={styles.body}>This helps us set the right difficulty level for your questions.</Text>
-              <View style={styles.cardRow}>
-                {GRADES.map((g) => (
-                  <TouchableOpacity
-                    key={g.value}
-                    style={[styles.gradeCard, grade === g.value && styles.gradeCardSelected]}
-                    onPress={() => { Haptics.selectionAsync(); setGrade(g.value); }}
-                  >
-                    <Text style={[styles.gradeLabel, grade === g.value && styles.gradeLabelSelected]}>
-                      {g.label}
-                    </Text>
-                    <Text style={[styles.gradeDesc, grade === g.value && styles.gradeDescSelected]}>
-                      {g.desc}
-                    </Text>
-                    {grade === g.value && (
-                      <View style={styles.checkBadge}>
-                        <Ionicons name="checkmark" size={14} color="#fff" />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
+            <>
+              <View style={styles.gradeRow}>
+                {GRADES.map((g) => {
+                  const selected = grade === g.value;
+                  return (
+                    <TouchableOpacity
+                      key={g.value}
+                      style={[styles.gradeCard, selected && { borderColor: g.color, backgroundColor: g.color }]}
+                      onPress={() => { Haptics.selectionAsync(); setGrade(g.value); }}
+                    >
+                      {selected && (
+                        <View style={styles.gradeCheck}>
+                          <Ionicons name="checkmark" size={12} color="#fff" />
+                        </View>
+                      )}
+                      <Text style={[styles.gradeLbl, selected && { color: "#fff" }]}>{g.label}</Text>
+                      <Text style={[styles.gradeDesc, selected && { color: "rgba(255,255,255,0.85)" }]}>{g.desc}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
               <TouchableOpacity
-                style={[styles.primaryBtn, !grade && styles.btnDisabled]}
+                style={[styles.bigBtn, { backgroundColor: headerColor }, !grade && styles.btnDisabled]}
                 onPress={() => grade && animateStep(3)}
                 disabled={!grade}
               >
-                <Text style={styles.primaryBtnText}>Continue</Text>
+                <Text style={styles.bigBtnTxt}>Continue</Text>
                 <Ionicons name="arrow-forward" size={18} color="#fff" />
               </TouchableOpacity>
-            </View>
+            </>
           )}
 
           {step === 3 && (
-            <View style={styles.stepWrap}>
-              <Text style={styles.stepLabel}>Subjects</Text>
-              <Text style={styles.headline}>What would you{"\n"}like to practise?</Text>
-              <Text style={styles.body}>You can change this later. We recommend 'Both' for best exam results.</Text>
+            <>
               <View style={styles.subjectList}>
-                {SUBJECTS.map((s) => (
-                  <TouchableOpacity
-                    key={s.value}
-                    style={[styles.subjectCard, subject === s.value && { borderColor: s.color, backgroundColor: s.color + "0F" }]}
-                    onPress={() => { Haptics.selectionAsync(); setSubject(s.value); }}
-                    activeOpacity={0.85}
-                  >
-                    <View style={[styles.subjectDot, { backgroundColor: s.color }]} />
-                    <View style={styles.subjectText}>
-                      <Text style={[styles.subjectLabel, subject === s.value && { color: s.color }]}>{s.label}</Text>
-                      <Text style={styles.subjectDesc}>{s.desc}</Text>
-                    </View>
-                    {subject === s.value && (
-                      <Ionicons name="checkmark-circle" size={22} color={s.color} />
-                    )}
-                  </TouchableOpacity>
-                ))}
+                {SUBJECTS.map((s) => {
+                  const sel = subject === s.value;
+                  return (
+                    <TouchableOpacity
+                      key={s.value}
+                      style={[styles.subjectCard, sel && { borderColor: s.color, backgroundColor: s.color + "10" }]}
+                      onPress={() => { Haptics.selectionAsync(); setSubject(s.value); }}
+                    >
+                      <View style={[styles.subjectIcon, { backgroundColor: sel ? s.color : s.color + "20" }]}>
+                        <Ionicons name={s.icon as any} size={22} color={sel ? "#fff" : s.color} />
+                      </View>
+                      <View style={styles.subjectTxt}>
+                        <Text style={[styles.subjectLbl, sel && { color: s.color }]}>{s.label}</Text>
+                        <Text style={styles.subjectDesc}>{s.desc}</Text>
+                      </View>
+                      {sel && <Ionicons name="checkmark-circle" size={24} color={s.color} />}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
               <TouchableOpacity
-                style={[styles.primaryBtn, (!subject || saving) && styles.btnDisabled]}
+                style={[styles.bigBtn, { backgroundColor: headerColor }, (!subject || saving) && styles.btnDisabled]}
                 onPress={finish}
                 disabled={!subject || saving}
               >
-                <Text style={styles.primaryBtnText}>
-                  {saving ? "Setting up..." : "Start My Journey"}
-                </Text>
+                <Text style={styles.bigBtnTxt}>{saving ? "Setting up..." : "Start My Journey"}</Text>
                 {!saving && <Ionicons name="rocket-outline" size={18} color="#fff" />}
               </TouchableOpacity>
-            </View>
+            </>
           )}
         </Animated.View>
       </ScrollView>
@@ -201,166 +231,133 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-  },
-  progressRow: {
-    flexDirection: "row",
+  root: { flex: 1, backgroundColor: Colors.light.background },
+  headerBand: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 28,
+    alignItems: "center",
     gap: 6,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
   },
-  progressBar: {
-    height: 4,
-    borderRadius: 2,
+  progressDots: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+    alignSelf: "center",
   },
-  progressInactive: { backgroundColor: Colors.light.border },
-  progressActive: { backgroundColor: Colors.light.navy },
-  progressDone: { backgroundColor: Colors.light.sage },
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 24,
-  },
-  stepWrap: {
-    gap: 20,
-  },
-  logoMark: {
-    width: 96,
-    height: 96,
-    borderRadius: 28,
-    backgroundColor: Colors.light.navyLight,
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  dotInactive: { backgroundColor: "rgba(255,255,255,0.3)" },
+  dotActive: { backgroundColor: "#fff", width: 24 },
+  dotDone: { backgroundColor: "rgba(255,255,255,0.7)" },
+  backBtn: {
+    position: "absolute",
+    left: 16,
+    top: 40,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.2)",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 4,
   },
-  stepLabel: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 12,
-    color: Colors.light.navy,
-    textTransform: "uppercase",
-    letterSpacing: 1.4,
+  headerIconWrap: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  headline: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 30,
-    color: Colors.light.navy,
-    lineHeight: 38,
+  headerTitle: { fontFamily: "Inter_700Bold", fontSize: 26, color: "#fff" },
+  headerSub: { fontFamily: "Inter_400Regular", fontSize: 14, color: "rgba(255,255,255,0.8)", textAlign: "center" },
+  sheet: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    marginTop: -16,
   },
-  body: {
+  sheetContent: { padding: 24 },
+  bodyText: {
     fontFamily: "Inter_400Regular",
     fontSize: 15,
     color: Colors.light.textSecondary,
-    lineHeight: 22,
+    lineHeight: 24,
   },
-  input: {
-    height: 56,
+  featureList: { gap: 10 },
+  featureRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
     backgroundColor: Colors.light.card,
     borderRadius: 14,
+    padding: 14,
+    borderLeftWidth: 4,
+  },
+  featureText: { fontFamily: "Inter_500Medium", fontSize: 14, color: Colors.light.text, flex: 1 },
+  bigBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    borderRadius: 18,
+    paddingVertical: 18,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  btnDisabled: { opacity: 0.35 },
+  bigBtnTxt: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#fff" },
+  input: {
+    height: 60,
+    backgroundColor: Colors.light.card,
+    borderRadius: 16,
     paddingHorizontal: 18,
     fontFamily: "Inter_500Medium",
-    fontSize: 17,
+    fontSize: 18,
     color: Colors.light.navy,
     borderWidth: 2,
     borderColor: Colors.light.border,
   },
-  cardRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
+  gradeRow: { flexDirection: "row", gap: 10 },
   gradeCard: {
     flex: 1,
     backgroundColor: Colors.light.card,
-    borderRadius: 18,
-    paddingVertical: 20,
-    paddingHorizontal: 12,
+    borderRadius: 20,
+    paddingVertical: 22,
+    paddingHorizontal: 10,
     alignItems: "center",
-    borderWidth: 2,
+    borderWidth: 2.5,
     borderColor: Colors.light.border,
     gap: 4,
   },
-  gradeCardSelected: {
-    borderColor: Colors.light.navy,
-    backgroundColor: Colors.light.navyLight,
-  },
-  gradeLabel: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 24,
-    color: Colors.light.textSecondary,
-  },
-  gradeLabelSelected: {
-    color: Colors.light.navy,
-  },
-  gradeDesc: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 11,
-    color: Colors.light.textTertiary,
-    textAlign: "center",
-  },
-  gradeDescSelected: {
-    color: Colors.light.navy,
-  },
-  checkBadge: {
+  gradeCheck: {
     position: "absolute",
     top: 8,
     right: 8,
-    backgroundColor: Colors.light.navy,
-    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.35)",
+    borderRadius: 8,
     width: 20,
     height: 20,
     justifyContent: "center",
     alignItems: "center",
   },
-  subjectList: {
-    gap: 10,
-  },
+  gradeLbl: { fontFamily: "Inter_700Bold", fontSize: 26, color: Colors.light.textSecondary },
+  gradeDesc: { fontFamily: "Inter_400Regular", fontSize: 11, color: Colors.light.textTertiary, textAlign: "center" },
+  subjectList: { gap: 12 },
   subjectCard: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: Colors.light.card,
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 16,
     gap: 14,
-    borderWidth: 2,
+    borderWidth: 2.5,
     borderColor: Colors.light.border,
   },
-  subjectDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  subjectText: {
-    flex: 1,
-    gap: 2,
-  },
-  subjectLabel: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 16,
-    color: Colors.light.navy,
-  },
-  subjectDesc: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 13,
-    color: Colors.light.textSecondary,
-  },
-  primaryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    backgroundColor: Colors.light.navy,
-    borderRadius: 16,
-    paddingVertical: 18,
-    marginTop: 4,
-  },
-  btnDisabled: {
-    opacity: 0.35,
-  },
-  primaryBtnText: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 16,
-    color: "#fff",
-  },
+  subjectIcon: { width: 48, height: 48, borderRadius: 14, justifyContent: "center", alignItems: "center" },
+  subjectTxt: { flex: 1, gap: 2 },
+  subjectLbl: { fontFamily: "Inter_700Bold", fontSize: 16, color: Colors.light.navy },
+  subjectDesc: { fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary },
 });
