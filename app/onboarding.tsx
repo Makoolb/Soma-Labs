@@ -12,161 +12,188 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useApp } from "@/context/AppContext";
+import { useApp, type Grade, type Subject } from "@/context/AppContext";
 
 const { width } = Dimensions.get("window");
 
-const AVATARS = ["🦁", "🐘", "🦅", "🦋", "🐬", "🦊"];
-const GRADES = [4, 5, 6] as const;
+const GRADES: { label: string; value: Grade; desc: string }[] = [
+  { label: "P4", value: "P4", desc: "Primary 4" },
+  { label: "P5", value: "P5", desc: "Primary 5" },
+  { label: "P6", value: "P6", desc: "Primary 6" },
+];
 
-export default function Onboarding() {
+const SUBJECTS: { label: string; value: Subject; desc: string; color: string }[] = [
+  { label: "Maths", value: "Maths", desc: "Numbers, shapes & problems", color: Colors.light.navy },
+  { label: "English", value: "English", desc: "Grammar, reading & writing", color: Colors.light.rust },
+  { label: "Both", value: "Both", desc: "Maths + English combined", color: Colors.light.sage },
+];
+
+export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { saveProfile } = useApp();
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
-  const [grade, setGrade] = useState<4 | 5 | 6 | null>(null);
-  const [avatar, setAvatar] = useState(0);
+  const [grade, setGrade] = useState<Grade | null>(null);
+  const [subject, setSubject] = useState<Subject | null>(null);
   const [saving, setSaving] = useState(false);
-  const slideAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  function goToStep(nextStep: number) {
-    Haptics.selectionAsync();
+  function animateStep(next: number) {
     Animated.sequence([
-      Animated.timing(slideAnim, { toValue: -20, duration: 150, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 0, duration: 120, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
     ]).start();
-    setStep(nextStep);
+    setTimeout(() => setStep(next), 120);
+    Haptics.selectionAsync();
   }
 
   async function finish() {
-    if (!grade) return;
+    if (!grade || !subject) return;
     setSaving(true);
-    await saveProfile({ name: name.trim() || "Star Student", grade, avatar: AVATARS[avatar] });
+    await saveProfile({ name: name.trim() || "Student", grade, subject });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.replace("/(tabs)");
+    router.replace("/diagnostic");
   }
 
-  const steps = [
-    // Step 0: Welcome
-    <View key="welcome" style={styles.stepContainer}>
-      <View style={styles.iconCircle}>
-        <MaterialCommunityIcons name="book-open-page-variant" size={56} color={Colors.light.primary} />
-      </View>
-      <Text style={styles.headline}>Welcome to{"\n"}SomaLabs</Text>
-      <Text style={styles.subtext}>
-        Your personal AI tutor for Common Entrance Exam success. Let's set up your learning profile!
-      </Text>
-      <TouchableOpacity style={styles.primaryBtn} onPress={() => goToStep(1)}>
-        <Text style={styles.primaryBtnText}>Get Started</Text>
-        <Ionicons name="arrow-forward" size={20} color="#fff" />
-      </TouchableOpacity>
-    </View>,
-
-    // Step 1: Name
-    <View key="name" style={styles.stepContainer}>
-      <Text style={styles.stepLabel}>Step 1 of 3</Text>
-      <Text style={styles.headline}>What's your name?</Text>
-      <Text style={styles.subtext}>We'll personalise your experience just for you.</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Enter your first name"
-        placeholderTextColor={Colors.light.textTertiary}
-        value={name}
-        onChangeText={setName}
-        maxLength={30}
-        autoCapitalize="words"
-        autoFocus
-      />
-      <TouchableOpacity
-        style={[styles.primaryBtn, !name.trim() && styles.disabledBtn]}
-        onPress={() => name.trim() && goToStep(2)}
-        disabled={!name.trim()}
-      >
-        <Text style={styles.primaryBtnText}>Continue</Text>
-        <Ionicons name="arrow-forward" size={20} color="#fff" />
-      </TouchableOpacity>
-    </View>,
-
-    // Step 2: Grade
-    <View key="grade" style={styles.stepContainer}>
-      <Text style={styles.stepLabel}>Step 2 of 3</Text>
-      <Text style={styles.headline}>What class are you in?</Text>
-      <Text style={styles.subtext}>We'll set the right difficulty level for you.</Text>
-      <View style={styles.gradeRow}>
-        {GRADES.map((g) => (
-          <TouchableOpacity
-            key={g}
-            style={[styles.gradeCard, grade === g && styles.gradeCardSelected]}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setGrade(g);
-            }}
-          >
-            <Text style={[styles.gradeNum, grade === g && styles.gradeNumSelected]}>
-              P{g}
-            </Text>
-            <Text style={[styles.gradeText, grade === g && styles.gradeTextSelected]}>
-              Primary {g}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <TouchableOpacity
-        style={[styles.primaryBtn, !grade && styles.disabledBtn]}
-        onPress={() => grade && goToStep(3)}
-        disabled={!grade}
-      >
-        <Text style={styles.primaryBtnText}>Continue</Text>
-        <Ionicons name="arrow-forward" size={20} color="#fff" />
-      </TouchableOpacity>
-    </View>,
-
-    // Step 3: Avatar
-    <View key="avatar" style={styles.stepContainer}>
-      <Text style={styles.stepLabel}>Step 3 of 3</Text>
-      <Text style={styles.headline}>Pick your avatar</Text>
-      <Text style={styles.subtext}>Choose who will guide you on your learning journey.</Text>
-      <View style={styles.avatarGrid}>
-        {AVATARS.map((a, i) => (
-          <TouchableOpacity
-            key={i}
-            style={[styles.avatarCard, avatar === i && styles.avatarCardSelected]}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setAvatar(i);
-            }}
-          >
-            <Text style={styles.avatarEmoji}>{a}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <TouchableOpacity
-        style={[styles.primaryBtn, saving && styles.disabledBtn]}
-        onPress={finish}
-        disabled={saving}
-      >
-        <Text style={styles.primaryBtnText}>{saving ? "Setting up..." : "Start Learning!"}</Text>
-        {!saving && <Ionicons name="rocket" size={20} color="#fff" />}
-      </TouchableOpacity>
-    </View>,
-  ];
+  const totalSteps = 3;
 
   return (
-    <View style={[styles.container, { paddingTop: topPad, paddingBottom: bottomPad }]}>
-      <View style={styles.dotsRow}>
-        {[0, 1, 2, 3].map((i) => (
-          <View key={i} style={[styles.dot, step >= i && styles.dotActive]} />
+    <View style={[styles.root, { paddingTop: topPad, paddingBottom: bottomPad }]}>
+      {/* Progress bar */}
+      <View style={styles.progressRow}>
+        {Array.from({ length: totalSteps }).map((_, i) => (
+          <View
+            key={i}
+            style={[styles.progressBar, { flex: 1 }, step > i ? styles.progressDone : step === i ? styles.progressActive : styles.progressInactive]}
+          />
         ))}
       </View>
+
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Animated.View style={{ transform: [{ translateX: slideAnim }] }}>
-          {steps[step]}
+        <Animated.View style={{ opacity: fadeAnim }}>
+          {step === 0 && (
+            <View style={styles.stepWrap}>
+              <View style={styles.logoMark}>
+                <Ionicons name="school" size={48} color={Colors.light.navy} />
+              </View>
+              <Text style={styles.headline}>Welcome to{"\n"}SomaLabs</Text>
+              <Text style={styles.body}>
+                Your personal Common Entrance tutor for Maths and English. Let's get you set up in just 3 steps.
+              </Text>
+              <TouchableOpacity style={styles.primaryBtn} onPress={() => animateStep(1)}>
+                <Text style={styles.primaryBtnText}>Let's Begin</Text>
+                <Ionicons name="arrow-forward" size={18} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {step === 1 && (
+            <View style={styles.stepWrap}>
+              <Text style={styles.stepLabel}>Your name</Text>
+              <Text style={styles.headline}>What should{"\n"}we call you?</Text>
+              <Text style={styles.body}>Enter the student's first name so we can personalise the experience.</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="First name"
+                placeholderTextColor={Colors.light.textTertiary}
+                value={name}
+                onChangeText={setName}
+                maxLength={40}
+                autoCapitalize="words"
+                autoFocus
+                returnKeyType="next"
+                onSubmitEditing={() => name.trim() && animateStep(2)}
+              />
+              <TouchableOpacity
+                style={[styles.primaryBtn, !name.trim() && styles.btnDisabled]}
+                onPress={() => name.trim() && animateStep(2)}
+                disabled={!name.trim()}
+              >
+                <Text style={styles.primaryBtnText}>Continue</Text>
+                <Ionicons name="arrow-forward" size={18} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {step === 2 && (
+            <View style={styles.stepWrap}>
+              <Text style={styles.stepLabel}>Class level</Text>
+              <Text style={styles.headline}>What class{"\n"}are you in?</Text>
+              <Text style={styles.body}>This helps us set the right difficulty level for your questions.</Text>
+              <View style={styles.cardRow}>
+                {GRADES.map((g) => (
+                  <TouchableOpacity
+                    key={g.value}
+                    style={[styles.gradeCard, grade === g.value && styles.gradeCardSelected]}
+                    onPress={() => { Haptics.selectionAsync(); setGrade(g.value); }}
+                  >
+                    <Text style={[styles.gradeLabel, grade === g.value && styles.gradeLabelSelected]}>
+                      {g.label}
+                    </Text>
+                    <Text style={[styles.gradeDesc, grade === g.value && styles.gradeDescSelected]}>
+                      {g.desc}
+                    </Text>
+                    {grade === g.value && (
+                      <View style={styles.checkBadge}>
+                        <Ionicons name="checkmark" size={14} color="#fff" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity
+                style={[styles.primaryBtn, !grade && styles.btnDisabled]}
+                onPress={() => grade && animateStep(3)}
+                disabled={!grade}
+              >
+                <Text style={styles.primaryBtnText}>Continue</Text>
+                <Ionicons name="arrow-forward" size={18} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {step === 3 && (
+            <View style={styles.stepWrap}>
+              <Text style={styles.stepLabel}>Subjects</Text>
+              <Text style={styles.headline}>What would you{"\n"}like to practise?</Text>
+              <Text style={styles.body}>You can change this later. We recommend 'Both' for best exam results.</Text>
+              <View style={styles.subjectList}>
+                {SUBJECTS.map((s) => (
+                  <TouchableOpacity
+                    key={s.value}
+                    style={[styles.subjectCard, subject === s.value && { borderColor: s.color, backgroundColor: s.color + "0F" }]}
+                    onPress={() => { Haptics.selectionAsync(); setSubject(s.value); }}
+                    activeOpacity={0.85}
+                  >
+                    <View style={[styles.subjectDot, { backgroundColor: s.color }]} />
+                    <View style={styles.subjectText}>
+                      <Text style={[styles.subjectLabel, subject === s.value && { color: s.color }]}>{s.label}</Text>
+                      <Text style={styles.subjectDesc}>{s.desc}</Text>
+                    </View>
+                    {subject === s.value && (
+                      <Ionicons name="checkmark-circle" size={22} color={s.color} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity
+                style={[styles.primaryBtn, (!subject || saving) && styles.btnDisabled]}
+                onPress={finish}
+                disabled={!subject || saving}
+              >
+                <Text style={styles.primaryBtnText}>
+                  {saving ? "Setting up..." : "Start My Journey"}
+                </Text>
+                {!saving && <Ionicons name="rocket-outline" size={18} color="#fff" />}
+              </TouchableOpacity>
+            </View>
+          )}
         </Animated.View>
       </ScrollView>
     </View>
@@ -174,156 +201,166 @@ export default function Onboarding() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
     backgroundColor: Colors.light.background,
   },
+  progressRow: {
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  progressBar: {
+    height: 4,
+    borderRadius: 2,
+  },
+  progressInactive: { backgroundColor: Colors.light.border },
+  progressActive: { backgroundColor: Colors.light.navy },
+  progressDone: { backgroundColor: Colors.light.sage },
   scroll: {
     flexGrow: 1,
-    justifyContent: "center",
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 24,
   },
-  dotsRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 8,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.light.border,
-  },
-  dotActive: {
-    backgroundColor: Colors.light.primary,
-    width: 24,
-  },
-  stepContainer: {
-    alignItems: "center",
+  stepWrap: {
     gap: 20,
   },
-  iconCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: Colors.light.primaryLight,
+  logoMark: {
+    width: 96,
+    height: 96,
+    borderRadius: 28,
+    backgroundColor: Colors.light.navyLight,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 4,
   },
   stepLabel: {
-    fontFamily: "Inter_500Medium",
-    fontSize: 13,
-    color: Colors.light.primary,
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+    color: Colors.light.navy,
     textTransform: "uppercase",
-    letterSpacing: 1.2,
+    letterSpacing: 1.4,
   },
   headline: {
     fontFamily: "Inter_700Bold",
-    fontSize: 32,
-    color: Colors.light.text,
-    textAlign: "center",
-    lineHeight: 40,
+    fontSize: 30,
+    color: Colors.light.navy,
+    lineHeight: 38,
   },
-  subtext: {
+  body: {
     fontFamily: "Inter_400Regular",
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.light.textSecondary,
-    textAlign: "center",
-    lineHeight: 24,
-    paddingHorizontal: 8,
+    lineHeight: 22,
   },
   input: {
-    width: "100%",
     height: 56,
     backgroundColor: Colors.light.card,
-    borderRadius: 16,
-    paddingHorizontal: 20,
+    borderRadius: 14,
+    paddingHorizontal: 18,
     fontFamily: "Inter_500Medium",
     fontSize: 17,
-    color: Colors.light.text,
+    color: Colors.light.navy,
     borderWidth: 2,
     borderColor: Colors.light.border,
   },
-  gradeRow: {
+  cardRow: {
     flexDirection: "row",
-    gap: 12,
-    width: "100%",
+    gap: 10,
   },
   gradeCard: {
     flex: 1,
     backgroundColor: Colors.light.card,
-    borderRadius: 20,
-    paddingVertical: 24,
+    borderRadius: 18,
+    paddingVertical: 20,
+    paddingHorizontal: 12,
     alignItems: "center",
     borderWidth: 2,
     borderColor: Colors.light.border,
-    gap: 6,
+    gap: 4,
   },
   gradeCardSelected: {
-    borderColor: Colors.light.primary,
-    backgroundColor: Colors.light.primaryLight,
+    borderColor: Colors.light.navy,
+    backgroundColor: Colors.light.navyLight,
   },
-  gradeNum: {
+  gradeLabel: {
     fontFamily: "Inter_700Bold",
-    fontSize: 28,
+    fontSize: 24,
     color: Colors.light.textSecondary,
   },
-  gradeNumSelected: {
-    color: Colors.light.primary,
+  gradeLabelSelected: {
+    color: Colors.light.navy,
   },
-  gradeText: {
+  gradeDesc: {
     fontFamily: "Inter_400Regular",
-    fontSize: 13,
+    fontSize: 11,
     color: Colors.light.textTertiary,
+    textAlign: "center",
   },
-  gradeTextSelected: {
-    color: Colors.light.primary,
+  gradeDescSelected: {
+    color: Colors.light.navy,
   },
-  avatarGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 12,
-    width: "100%",
-  },
-  avatarCard: {
-    width: (width - 48 - 36) / 3,
-    aspectRatio: 1,
-    backgroundColor: Colors.light.card,
-    borderRadius: 20,
+  checkBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: Colors.light.navy,
+    borderRadius: 10,
+    width: 20,
+    height: 20,
     justifyContent: "center",
     alignItems: "center",
+  },
+  subjectList: {
+    gap: 10,
+  },
+  subjectCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.light.card,
+    borderRadius: 16,
+    padding: 16,
+    gap: 14,
     borderWidth: 2,
     borderColor: Colors.light.border,
   },
-  avatarCardSelected: {
-    borderColor: Colors.light.primary,
-    backgroundColor: Colors.light.primaryLight,
+  subjectDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
-  avatarEmoji: {
-    fontSize: 40,
+  subjectText: {
+    flex: 1,
+    gap: 2,
+  },
+  subjectLabel: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 16,
+    color: Colors.light.navy,
+  },
+  subjectDesc: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    color: Colors.light.textSecondary,
   },
   primaryBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    backgroundColor: Colors.light.primary,
+    backgroundColor: Colors.light.navy,
     borderRadius: 16,
     paddingVertical: 18,
-    paddingHorizontal: 32,
-    width: "100%",
-    marginTop: 8,
+    marginTop: 4,
   },
-  disabledBtn: {
-    opacity: 0.4,
+  btnDisabled: {
+    opacity: 0.35,
   },
   primaryBtnText: {
     fontFamily: "Inter_600SemiBold",
-    fontSize: 17,
+    fontSize: 16,
     color: "#fff",
   },
 });

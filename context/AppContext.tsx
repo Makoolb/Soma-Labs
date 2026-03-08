@@ -1,48 +1,60 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+export type Grade = "P4" | "P5" | "P6";
+export type Subject = "English" | "Maths" | "Both";
+
 export interface StudentProfile {
   name: string;
-  grade: 4 | 5 | 6;
-  avatar: string;
+  grade: Grade;
+  subject: Subject;
 }
 
-export interface TopicProgress {
-  subject: "maths" | "english";
+export interface AnswerRecord {
+  questionId: string;
+  correct: boolean;
   topic: string;
-  correct: number;
-  total: number;
-  lastPracticed: string;
+  subject: "maths" | "english";
 }
 
 export interface SessionResult {
   id: string;
-  subject: "maths" | "english";
+  date: string;
+  subject: "maths" | "english" | "both";
   topic: string;
   score: number;
   total: number;
+  answers: AnswerRecord[];
+}
+
+export interface DiagnosticResult {
   date: string;
+  mathsScore: number;
+  mathsTotal: number;
+  englishScore: number;
+  englishTotal: number;
 }
 
 interface AppContextValue {
   profile: StudentProfile | null;
   isOnboarded: boolean;
-  topicProgress: TopicProgress[];
+  diagnosticDone: boolean;
+  diagnosticResult: DiagnosticResult | null;
   sessions: SessionResult[];
   streakDays: number;
   totalXP: number;
   isLoading: boolean;
   saveProfile: (profile: StudentProfile) => Promise<void>;
-  updateTopicProgress: (subject: "maths" | "english", topic: string, correct: number, total: number) => Promise<void>;
+  saveDiagnosticResult: (result: DiagnosticResult) => Promise<void>;
   addSession: (session: Omit<SessionResult, "id">) => Promise<void>;
-  resetProgress: () => Promise<void>;
+  resetAll: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-const STORAGE_KEYS = {
+const KEYS = {
   PROFILE: "@somalabs/profile",
-  PROGRESS: "@somalabs/progress",
+  DIAGNOSTIC: "@somalabs/diagnostic",
   SESSIONS: "@somalabs/sessions",
   STREAK: "@somalabs/streak",
   XP: "@somalabs/xp",
@@ -51,109 +63,90 @@ const STORAGE_KEYS = {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
-  const [topicProgress, setTopicProgress] = useState<TopicProgress[]>([]);
+  const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResult | null>(null);
   const [sessions, setSessions] = useState<SessionResult[]>([]);
   const [streakDays, setStreakDays] = useState(0);
   const [totalXP, setTotalXP] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadData();
+    load();
   }, []);
 
-  async function loadData() {
+  async function load() {
     try {
-      const [profileStr, progressStr, sessionsStr, streakStr, xpStr, lastPracticeStr] = await Promise.all([
-        AsyncStorage.getItem(STORAGE_KEYS.PROFILE),
-        AsyncStorage.getItem(STORAGE_KEYS.PROGRESS),
-        AsyncStorage.getItem(STORAGE_KEYS.SESSIONS),
-        AsyncStorage.getItem(STORAGE_KEYS.STREAK),
-        AsyncStorage.getItem(STORAGE_KEYS.XP),
-        AsyncStorage.getItem(STORAGE_KEYS.LAST_PRACTICE),
+      const [pStr, dStr, sStr, xpStr, streakStr, lastStr] = await Promise.all([
+        AsyncStorage.getItem(KEYS.PROFILE),
+        AsyncStorage.getItem(KEYS.DIAGNOSTIC),
+        AsyncStorage.getItem(KEYS.SESSIONS),
+        AsyncStorage.getItem(KEYS.XP),
+        AsyncStorage.getItem(KEYS.STREAK),
+        AsyncStorage.getItem(KEYS.LAST_PRACTICE),
       ]);
-
-      if (profileStr) setProfile(JSON.parse(profileStr));
-      if (progressStr) setTopicProgress(JSON.parse(progressStr));
-      if (sessionsStr) setSessions(JSON.parse(sessionsStr));
-      if (xpStr) setTotalXP(parseInt(xpStr));
+      if (pStr) setProfile(JSON.parse(pStr));
+      if (dStr) setDiagnosticResult(JSON.parse(dStr));
+      if (sStr) setSessions(JSON.parse(sStr));
+      if (xpStr) setTotalXP(parseInt(xpStr, 10));
 
       const today = new Date().toDateString();
-      if (streakStr && lastPracticeStr) {
-        const yesterday = new Date(Date.now() - 86400000).toDateString();
-        const lastDate = new Date(lastPracticeStr).toDateString();
+      const yesterday = new Date(Date.now() - 86400000).toDateString();
+      if (streakStr && lastStr) {
+        const lastDate = new Date(lastStr).toDateString();
         if (lastDate === today || lastDate === yesterday) {
-          setStreakDays(parseInt(streakStr));
-        } else {
-          setStreakDays(0);
+          setStreakDays(parseInt(streakStr, 10));
         }
       }
     } catch (e) {
-      console.error("Failed to load data:", e);
+      console.error("Load failed:", e);
     } finally {
       setIsLoading(false);
     }
   }
 
-  async function saveProfile(newProfile: StudentProfile) {
-    setProfile(newProfile);
-    await AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(newProfile));
+  async function saveProfile(p: StudentProfile) {
+    setProfile(p);
+    await AsyncStorage.setItem(KEYS.PROFILE, JSON.stringify(p));
   }
 
-  async function updateTopicProgress(subject: "maths" | "english", topic: string, correct: number, total: number) {
-    const now = new Date().toISOString();
-    const today = new Date().toDateString();
-
-    setTopicProgress((prev) => {
-      const existing = prev.find((p) => p.subject === subject && p.topic === topic);
-      let updated: TopicProgress[];
-      if (existing) {
-        updated = prev.map((p) =>
-          p.subject === subject && p.topic === topic
-            ? { ...p, correct: p.correct + correct, total: p.total + total, lastPracticed: now }
-            : p
-        );
-      } else {
-        updated = [...prev, { subject, topic, correct, total, lastPracticed: now }];
-      }
-      AsyncStorage.setItem(STORAGE_KEYS.PROGRESS, JSON.stringify(updated));
-      return updated;
-    });
-
-    const xpGained = correct * 10;
-    setTotalXP((prev) => {
-      const newXP = prev + xpGained;
-      AsyncStorage.setItem(STORAGE_KEYS.XP, String(newXP));
-      return newXP;
-    });
-
-    const lastPractice = await AsyncStorage.getItem(STORAGE_KEYS.LAST_PRACTICE);
-    const lastDate = lastPractice ? new Date(lastPractice).toDateString() : null;
-    const yesterday = new Date(Date.now() - 86400000).toDateString();
-
-    if (lastDate !== today) {
-      setStreakDays((prev) => {
-        const newStreak = lastDate === yesterday ? prev + 1 : 1;
-        AsyncStorage.setItem(STORAGE_KEYS.STREAK, String(newStreak));
-        return newStreak;
-      });
-      await AsyncStorage.setItem(STORAGE_KEYS.LAST_PRACTICE, now);
-    }
+  async function saveDiagnosticResult(result: DiagnosticResult) {
+    setDiagnosticResult(result);
+    await AsyncStorage.setItem(KEYS.DIAGNOSTIC, JSON.stringify(result));
   }
 
   async function addSession(session: Omit<SessionResult, "id">) {
-    const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-    const newSession: SessionResult = { ...session, id };
+    const id = Date.now().toString() + Math.random().toString(36).slice(2, 7);
+    const full: SessionResult = { ...session, id };
+
+    const xpGained = full.score * 10;
+    setTotalXP((prev) => {
+      const next = prev + xpGained;
+      AsyncStorage.setItem(KEYS.XP, String(next));
+      return next;
+    });
+
+    const today = new Date().toDateString();
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    const last = await AsyncStorage.getItem(KEYS.LAST_PRACTICE);
+    const lastDate = last ? new Date(last).toDateString() : null;
+
+    if (lastDate !== today) {
+      const newStreak = lastDate === yesterday ? streakDays + 1 : 1;
+      setStreakDays(newStreak);
+      await AsyncStorage.setItem(KEYS.STREAK, String(newStreak));
+      await AsyncStorage.setItem(KEYS.LAST_PRACTICE, new Date().toISOString());
+    }
+
     setSessions((prev) => {
-      const updated = [newSession, ...prev].slice(0, 50);
-      AsyncStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(updated));
+      const updated = [full, ...prev].slice(0, 100);
+      AsyncStorage.setItem(KEYS.SESSIONS, JSON.stringify(updated));
       return updated;
     });
   }
 
-  async function resetProgress() {
-    await Promise.all(Object.values(STORAGE_KEYS).map((k) => AsyncStorage.removeItem(k)));
+  async function resetAll() {
+    await Promise.all(Object.values(KEYS).map((k) => AsyncStorage.removeItem(k)));
     setProfile(null);
-    setTopicProgress([]);
+    setDiagnosticResult(null);
     setSessions([]);
     setStreakDays(0);
     setTotalXP(0);
@@ -163,17 +156,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => ({
       profile,
       isOnboarded: !!profile,
-      topicProgress,
+      diagnosticDone: !!diagnosticResult,
+      diagnosticResult,
       sessions,
       streakDays,
       totalXP,
       isLoading,
       saveProfile,
-      updateTopicProgress,
+      saveDiagnosticResult,
       addSession,
-      resetProgress,
+      resetAll,
     }),
-    [profile, topicProgress, sessions, streakDays, totalXP, isLoading]
+    [profile, diagnosticResult, sessions, streakDays, totalXP, isLoading]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

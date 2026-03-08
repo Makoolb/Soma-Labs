@@ -2,8 +2,9 @@ import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
 import { NativeTabs, Icon, Label } from "expo-router/unstable-native-tabs";
 import { BlurView } from "expo-blur";
-import { Platform, StyleSheet, useColorScheme, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import React from "react";
+import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 
 function NativeTabLayout() {
@@ -14,16 +15,12 @@ function NativeTabLayout() {
         <Label>Home</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="practice">
-        <Icon sf={{ default: "pencil.and.list.clipboard", selected: "pencil.and.list.clipboard" }} />
+        <Icon sf={{ default: "pencil", selected: "pencil.fill" }} />
         <Label>Practice</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="progress">
         <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
         <Label>Progress</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="parent">
-        <Icon sf={{ default: "person.2", selected: "person.2.fill" }} />
-        <Label>Parent</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -37,7 +34,7 @@ function ClassicTabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.light.primary,
+        tabBarActiveTintColor: Colors.light.navy,
         tabBarInactiveTintColor: Colors.light.tabIconDefault,
         tabBarStyle: {
           position: "absolute",
@@ -63,40 +60,27 @@ function ClassicTabLayout() {
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color, focused }) => {
-            const { Ionicons } = require("@expo/vector-icons");
-            return <Ionicons name={focused ? "home" : "home-outline"} size={24} color={color} />;
-          },
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "home" : "home-outline"} size={24} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="practice"
         options={{
           title: "Practice",
-          tabBarIcon: ({ color, focused }) => {
-            const { Ionicons } = require("@expo/vector-icons");
-            return <Ionicons name={focused ? "pencil" : "pencil-outline"} size={24} color={color} />;
-          },
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "pencil" : "pencil-outline"} size={24} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="progress"
         options={{
           title: "Progress",
-          tabBarIcon: ({ color, focused }) => {
-            const { Ionicons } = require("@expo/vector-icons");
-            return <Ionicons name={focused ? "bar-chart" : "bar-chart-outline"} size={24} color={color} />;
-          },
-        }}
-      />
-      <Tabs.Screen
-        name="parent"
-        options={{
-          title: "Parent",
-          tabBarIcon: ({ color, focused }) => {
-            const { Ionicons } = require("@expo/vector-icons");
-            return <Ionicons name={focused ? "people" : "people-outline"} size={24} color={color} />;
-          },
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "bar-chart" : "bar-chart-outline"} size={24} color={color} />
+          ),
         }}
       />
     </Tabs>

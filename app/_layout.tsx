@@ -22,10 +22,11 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="onboarding" />
+      <Stack.Screen name="diagnostic" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen
-        name="session"
-        options={{ presentation: "fullScreenModal", animation: "slide_from_bottom" }}
+        name="results"
+        options={{ presentation: "modal", animation: "slide_from_bottom" }}
       />
     </Stack>
   );

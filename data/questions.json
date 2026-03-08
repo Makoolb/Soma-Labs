@@ -1,0 +1,477 @@
+[
+  {
+    "id": "m001",
+    "subject": "maths",
+    "grade": "P4",
+    "topic": "Basic Operations",
+    "question": "Amaka has 48 oranges. She shares them equally among 6 friends. How many oranges does each friend get?",
+    "options": ["6", "7", "8", "9"],
+    "correctIndex": 2,
+    "explanation": "48 ÷ 6 = 8. Divide the total by the number of friends to find each person's share."
+  },
+  {
+    "id": "m002",
+    "subject": "maths",
+    "grade": "P4",
+    "topic": "Basic Operations",
+    "question": "A market stall has 135 tomatoes in the morning. By afternoon, 78 are sold. How many remain?",
+    "options": ["47", "57", "67", "77"],
+    "correctIndex": 1,
+    "explanation": "135 − 78 = 57. Subtract the number sold from the original amount."
+  },
+  {
+    "id": "m003",
+    "subject": "maths",
+    "grade": "P4",
+    "topic": "Money",
+    "question": "Emeka buys a book for ₦350 and a pen for ₦75. How much does he spend altogether?",
+    "options": ["₦415", "₦425", "₦435", "₦445"],
+    "correctIndex": 1,
+    "explanation": "350 + 75 = 425. Add both amounts to find the total spent."
+  },
+  {
+    "id": "m004",
+    "subject": "maths",
+    "grade": "P4",
+    "topic": "Multiplication Tables",
+    "question": "What is 7 × 9?",
+    "options": ["54", "56", "63", "72"],
+    "correctIndex": 2,
+    "explanation": "7 × 9 = 63. Count 7 groups of 9: 9, 18, 27, 36, 45, 54, 63."
+  },
+  {
+    "id": "m005",
+    "subject": "maths",
+    "grade": "P4",
+    "topic": "Number & Numeration",
+    "question": "What is the place value of 4 in the number 2,473?",
+    "options": ["Ones", "Tens", "Hundreds", "Thousands"],
+    "correctIndex": 2,
+    "explanation": "In 2,473, the digit 4 is in the hundreds position (400)."
+  },
+  {
+    "id": "m006",
+    "subject": "maths",
+    "grade": "P5",
+    "topic": "Fractions & Decimals",
+    "question": "Which fraction is equivalent to 3/4?",
+    "options": ["6/10", "9/12", "4/6", "2/3"],
+    "correctIndex": 1,
+    "explanation": "3/4 = 9/12 because both numerator and denominator are multiplied by 3. Equivalent fractions have the same value."
+  },
+  {
+    "id": "m007",
+    "subject": "maths",
+    "grade": "P5",
+    "topic": "Fractions & Decimals",
+    "question": "A journey is 12.5 km. Taiwo has walked 7.8 km. How much further must she walk?",
+    "options": ["4.3 km", "4.7 km", "5.3 km", "5.7 km"],
+    "correctIndex": 1,
+    "explanation": "12.5 − 7.8 = 4.7 km. Subtract the distance walked from the total distance."
+  },
+  {
+    "id": "m008",
+    "subject": "maths",
+    "grade": "P5",
+    "topic": "Percentages",
+    "question": "What is 25% of 200?",
+    "options": ["25", "40", "50", "75"],
+    "correctIndex": 2,
+    "explanation": "25% of 200 = 25/100 × 200 = 50. A quarter of 200 is 50."
+  },
+  {
+    "id": "m009",
+    "subject": "maths",
+    "grade": "P5",
+    "topic": "Geometry & Shapes",
+    "question": "How many sides does a hexagon have?",
+    "options": ["4", "5", "6", "7"],
+    "correctIndex": 2,
+    "explanation": "A hexagon has 6 sides. 'Hex' comes from the Greek word for 6."
+  },
+  {
+    "id": "m010",
+    "subject": "maths",
+    "grade": "P5",
+    "topic": "Measurement",
+    "question": "A rectangle has a length of 8 cm and a width of 5 cm. What is its perimeter?",
+    "options": ["13 cm", "26 cm", "40 cm", "45 cm"],
+    "correctIndex": 1,
+    "explanation": "Perimeter = 2 × (length + width) = 2 × (8 + 5) = 2 × 13 = 26 cm."
+  },
+  {
+    "id": "m011",
+    "subject": "maths",
+    "grade": "P5",
+    "topic": "Measurement",
+    "question": "A rectangle is 9 cm long and 4 cm wide. What is its area?",
+    "options": ["13 cm²", "26 cm²", "36 cm²", "40 cm²"],
+    "correctIndex": 2,
+    "explanation": "Area = length × width = 9 × 4 = 36 cm²."
+  },
+  {
+    "id": "m012",
+    "subject": "maths",
+    "grade": "P6",
+    "topic": "Percentages",
+    "question": "A shirt costs ₦2,000. It is on sale at 15% discount. What is the sale price?",
+    "options": ["₦1,600", "₦1,700", "₦1,750", "₦1,800"],
+    "correctIndex": 1,
+    "explanation": "15% of 2000 = 300. Sale price = 2000 − 300 = ₦1,700."
+  },
+  {
+    "id": "m013",
+    "subject": "maths",
+    "grade": "P6",
+    "topic": "Fractions & Decimals",
+    "question": "Express 0.35 as a fraction in its lowest terms.",
+    "options": ["35/100", "7/20", "3/5", "1/3"],
+    "correctIndex": 1,
+    "explanation": "0.35 = 35/100 = 7/20 (divide both by 5). 7/20 is the simplest form."
+  },
+  {
+    "id": "m014",
+    "subject": "maths",
+    "grade": "P6",
+    "topic": "Word Problems",
+    "question": "A train travels at 80 km/h. How far does it travel in 2.5 hours?",
+    "options": ["160 km", "180 km", "200 km", "220 km"],
+    "correctIndex": 2,
+    "explanation": "Distance = speed × time = 80 × 2.5 = 200 km."
+  },
+  {
+    "id": "m015",
+    "subject": "maths",
+    "grade": "P6",
+    "topic": "Number & Numeration",
+    "question": "What is the Lowest Common Multiple (LCM) of 4 and 6?",
+    "options": ["8", "10", "12", "24"],
+    "correctIndex": 2,
+    "explanation": "Multiples of 4: 4, 8, 12, 16… Multiples of 6: 6, 12, 18… The smallest common value is 12."
+  },
+  {
+    "id": "m016",
+    "subject": "maths",
+    "grade": "P6",
+    "topic": "Data & Charts",
+    "question": "The scores of 5 students are: 60, 70, 80, 90, 50. What is their average score?",
+    "options": ["60", "65", "70", "75"],
+    "correctIndex": 2,
+    "explanation": "Average = (60+70+80+90+50) ÷ 5 = 350 ÷ 5 = 70."
+  },
+  {
+    "id": "m017",
+    "subject": "maths",
+    "grade": "P4",
+    "topic": "Time & Calendar",
+    "question": "School starts at 8:00 am and ends at 2:30 pm. How many hours is the school day?",
+    "options": ["5 hours", "5.5 hours", "6 hours", "6.5 hours"],
+    "correctIndex": 2,
+    "explanation": "From 8:00 am to 2:30 pm is 6 hours and 30 minutes, which is 6.5 hours."
+  },
+  {
+    "id": "m018",
+    "subject": "maths",
+    "grade": "P5",
+    "topic": "Number & Numeration",
+    "question": "Which of these numbers is a prime number?",
+    "options": ["15", "21", "29", "33"],
+    "correctIndex": 2,
+    "explanation": "29 is a prime number — it has no factors other than 1 and itself. 15=3×5, 21=3×7, 33=3×11."
+  },
+  {
+    "id": "m019",
+    "subject": "maths",
+    "grade": "P6",
+    "topic": "Geometry & Shapes",
+    "question": "What is the sum of angles in a triangle?",
+    "options": ["90°", "180°", "270°", "360°"],
+    "correctIndex": 1,
+    "explanation": "The three angles of any triangle always add up to 180°."
+  },
+  {
+    "id": "m020",
+    "subject": "maths",
+    "grade": "P4",
+    "topic": "Basic Operations",
+    "question": "What is 15 × 12?",
+    "options": ["150", "170", "180", "190"],
+    "correctIndex": 2,
+    "explanation": "15 × 12 = 15 × 10 + 15 × 2 = 150 + 30 = 180."
+  },
+  {
+    "id": "e001",
+    "subject": "english",
+    "grade": "P4",
+    "topic": "Grammar & Tenses",
+    "question": "Choose the correct verb: 'The children ___ playing in the field.'",
+    "options": ["is", "was", "are", "were"],
+    "correctIndex": 2,
+    "explanation": "'Children' is a plural noun, so we use 'are' (present tense) to agree with it."
+  },
+  {
+    "id": "e002",
+    "subject": "english",
+    "grade": "P4",
+    "topic": "Vocabulary & Spelling",
+    "question": "Which word is spelled correctly?",
+    "options": ["recieve", "receive", "recive", "receeve"],
+    "correctIndex": 1,
+    "explanation": "'Receive' is the correct spelling. Remember: 'i before e, except after c'."
+  },
+  {
+    "id": "e003",
+    "subject": "english",
+    "grade": "P4",
+    "topic": "Parts of Speech",
+    "question": "Which word in this sentence is a noun? 'The clever boy solved the puzzle.'",
+    "options": ["clever", "solved", "the", "puzzle"],
+    "correctIndex": 3,
+    "explanation": "A noun names a person, place, or thing. 'Puzzle' is a thing, so it is a noun. 'Boy' is also a noun."
+  },
+  {
+    "id": "e004",
+    "subject": "english",
+    "grade": "P4",
+    "topic": "Punctuation & Capitals",
+    "question": "Which sentence uses a capital letter correctly?",
+    "options": [
+      "we live in Lagos.",
+      "We live in lagos.",
+      "We live in Lagos.",
+      "we live in lagos."
+    ],
+    "correctIndex": 2,
+    "explanation": "A sentence must begin with a capital letter, and proper nouns (like Lagos) must always be capitalised."
+  },
+  {
+    "id": "e005",
+    "subject": "english",
+    "grade": "P5",
+    "topic": "Synonyms & Antonyms",
+    "question": "What is the antonym (opposite) of 'generous'?",
+    "options": ["kind", "selfish", "brave", "honest"],
+    "correctIndex": 1,
+    "explanation": "An antonym is a word with the opposite meaning. The opposite of generous (giving freely) is selfish (keeping things for yourself)."
+  },
+  {
+    "id": "e006",
+    "subject": "english",
+    "grade": "P5",
+    "topic": "Grammar & Tenses",
+    "question": "Change to past tense: 'She writes a letter to her grandmother.'",
+    "options": [
+      "She write a letter to her grandmother.",
+      "She written a letter to her grandmother.",
+      "She wrote a letter to her grandmother.",
+      "She has write a letter to her grandmother."
+    ],
+    "correctIndex": 2,
+    "explanation": "The past tense of 'writes' is 'wrote'. Irregular verbs like write/wrote must be memorised."
+  },
+  {
+    "id": "e007",
+    "subject": "english",
+    "grade": "P5",
+    "topic": "Sentence Construction",
+    "question": "Which sentence is grammatically correct?",
+    "options": [
+      "Neither Tolu nor Bisi were present.",
+      "Neither Tolu nor Bisi was present.",
+      "Neither Tolu nor Bisi are present.",
+      "Neither Tolu nor Bisi is been present."
+    ],
+    "correctIndex": 1,
+    "explanation": "With 'neither…nor', the verb agrees with the nearest subject. Since 'Bisi' is singular, we use 'was'."
+  },
+  {
+    "id": "e008",
+    "subject": "english",
+    "grade": "P5",
+    "topic": "Vocabulary & Spelling",
+    "question": "Choose the word that best completes: 'The teacher gave a ___ explanation of the topic.'",
+    "options": ["vague", "clear", "cloudy", "absent"],
+    "correctIndex": 1,
+    "explanation": "A good teacher gives a 'clear' explanation — easy to understand. 'Vague' and 'cloudy' mean unclear."
+  },
+  {
+    "id": "e009",
+    "subject": "english",
+    "grade": "P6",
+    "topic": "Comprehension",
+    "question": "Read: 'The ancient baobab tree stood at the centre of the village. Elders gathered under it to settle disputes.' What role does the tree play?",
+    "options": [
+      "It provides fruit for the village.",
+      "It is a meeting place for resolving conflicts.",
+      "It is worshipped as a god.",
+      "It marks the boundary of the village."
+    ],
+    "correctIndex": 1,
+    "explanation": "The passage says elders gather under the tree 'to settle disputes', meaning it is used for resolving conflicts."
+  },
+  {
+    "id": "e010",
+    "subject": "english",
+    "grade": "P6",
+    "topic": "Idioms & Proverbs",
+    "question": "What does the proverb 'A stitch in time saves nine' mean?",
+    "options": [
+      "Sewing is an important skill.",
+      "You should always carry a needle.",
+      "Acting early prevents bigger problems later.",
+      "Nine is a lucky number."
+    ],
+    "correctIndex": 2,
+    "explanation": "This proverb means that fixing a small problem early prevents it from becoming a bigger one — act promptly!"
+  },
+  {
+    "id": "e011",
+    "subject": "english",
+    "grade": "P6",
+    "topic": "Parts of Speech",
+    "question": "Identify the adverb in: 'The athlete ran swiftly to the finish line.'",
+    "options": ["athlete", "ran", "swiftly", "finish"],
+    "correctIndex": 2,
+    "explanation": "An adverb modifies a verb. 'Swiftly' tells us HOW the athlete ran, so it is an adverb."
+  },
+  {
+    "id": "e012",
+    "subject": "english",
+    "grade": "P6",
+    "topic": "Grammar & Tenses",
+    "question": "Which sentence is in the passive voice?",
+    "options": [
+      "The teacher marked the books.",
+      "The books were marked by the teacher.",
+      "The teacher is marking the books.",
+      "The teacher will mark the books."
+    ],
+    "correctIndex": 1,
+    "explanation": "In passive voice, the subject receives the action. 'The books were marked' — the books are the subject receiving the action of being marked."
+  },
+  {
+    "id": "e013",
+    "subject": "english",
+    "grade": "P4",
+    "topic": "Synonyms & Antonyms",
+    "question": "Which word means the same as 'happy'?",
+    "options": ["sad", "angry", "joyful", "tired"],
+    "correctIndex": 2,
+    "explanation": "'Joyful' means feeling great happiness — it is a synonym (same meaning) for 'happy'."
+  },
+  {
+    "id": "e014",
+    "subject": "english",
+    "grade": "P5",
+    "topic": "Punctuation & Capitals",
+    "question": "Which punctuation mark is used at the end of a question?",
+    "options": ["Full stop (.)", "Comma (,)", "Question mark (?)", "Exclamation mark (!)"],
+    "correctIndex": 2,
+    "explanation": "A question mark (?) is placed at the end of every direct question."
+  },
+  {
+    "id": "e015",
+    "subject": "english",
+    "grade": "P6",
+    "topic": "Comprehension",
+    "question": "What is the main purpose of a topic sentence in a paragraph?",
+    "options": [
+      "To end the paragraph with a conclusion.",
+      "To introduce the main idea of the paragraph.",
+      "To give examples and details.",
+      "To connect two paragraphs together."
+    ],
+    "correctIndex": 1,
+    "explanation": "A topic sentence introduces the main idea of a paragraph. It tells the reader what the paragraph is about."
+  },
+  {
+    "id": "e016",
+    "subject": "english",
+    "grade": "P4",
+    "topic": "Grammar & Tenses",
+    "question": "Choose the correct pronoun: '___ and I went to the market together.'",
+    "options": ["Him", "Her", "Them", "She"],
+    "correctIndex": 3,
+    "explanation": "When the pronoun is the subject of a sentence (doing the action), use 'she', not 'her'. 'She and I went…'"
+  },
+  {
+    "id": "e017",
+    "subject": "english",
+    "grade": "P5",
+    "topic": "Vocabulary & Spelling",
+    "question": "Which word is the correct plural of 'leaf'?",
+    "options": ["leafs", "leaves", "leafes", "leafs"],
+    "correctIndex": 1,
+    "explanation": "Words ending in 'f' or 'fe' usually change to 'ves' in the plural: leaf → leaves, knife → knives."
+  },
+  {
+    "id": "e018",
+    "subject": "english",
+    "grade": "P6",
+    "topic": "Letter Writing",
+    "question": "Which of these is the correct way to begin a formal letter?",
+    "options": [
+      "Hey Sir/Madam,",
+      "Dear Sir/Madam,",
+      "Hello, dear sir,",
+      "What's up,"
+    ],
+    "correctIndex": 1,
+    "explanation": "Formal letters must start with 'Dear Sir/Madam,' — this shows respect and is the accepted formal greeting."
+  },
+  {
+    "id": "e019",
+    "subject": "english",
+    "grade": "P4",
+    "topic": "Parts of Speech",
+    "question": "Which word is an adjective in: 'The tall boy climbed the tree.'?",
+    "options": ["boy", "climbed", "tall", "tree"],
+    "correctIndex": 2,
+    "explanation": "An adjective describes a noun. 'Tall' describes the boy, so it is an adjective."
+  },
+  {
+    "id": "e020",
+    "subject": "english",
+    "grade": "P5",
+    "topic": "Idioms & Proverbs",
+    "question": "What does 'it's raining cats and dogs' mean?",
+    "options": [
+      "Animals are falling from the sky.",
+      "It is raining very heavily.",
+      "Cats and dogs do not get along.",
+      "The weather is unpredictable."
+    ],
+    "correctIndex": 1,
+    "explanation": "This is an idiom. It does not mean real cats and dogs — it means it is raining very heavily."
+  },
+  {
+    "id": "m021",
+    "subject": "maths",
+    "grade": "P6",
+    "topic": "Number & Numeration",
+    "question": "What is the Highest Common Factor (HCF) of 24 and 36?",
+    "options": ["6", "8", "12", "18"],
+    "correctIndex": 2,
+    "explanation": "Factors of 24: 1,2,3,4,6,8,12,24. Factors of 36: 1,2,3,4,6,9,12,18,36. The highest common factor is 12."
+  },
+  {
+    "id": "m022",
+    "subject": "maths",
+    "grade": "P5",
+    "topic": "Money",
+    "question": "Ngozi buys 3 exercise books at ₦120 each and a ruler for ₦85. How much change does she get from ₦500?",
+    "options": ["₦35", "₦45", "₦55", "₦65"],
+    "correctIndex": 3,
+    "explanation": "Cost = (3×120) + 85 = 360 + 85 = 445. Change = 500 − 445 = ₦55. Wait — the answer is ₦55."
+  },
+  {
+    "id": "m023",
+    "subject": "maths",
+    "grade": "P4",
+    "topic": "Number & Numeration",
+    "question": "Round 3,647 to the nearest hundred.",
+    "options": ["3,500", "3,600", "3,700", "4,000"],
+    "correctIndex": 1,
+    "explanation": "Look at the tens digit (4). Since 4 < 5, we round down. 3,647 rounded to the nearest hundred is 3,600."
+  }
+]
