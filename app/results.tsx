@@ -15,7 +15,15 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp, type AnswerRecord } from "@/context/AppContext";
 
-function getNextSteps(pct: number, topic: string): string {
+const WEAK_COLORS = [Colors.light.rust, Colors.light.gold, Colors.light.optionC];
+
+function getNextSteps(pct: number, topic: string, isSmartSession: boolean, weakTopics: string[]): string {
+  if (isSmartSession) {
+    const focus = weakTopics.slice(0, 2).join(" and ");
+    if (pct >= 80) return `Outstanding! You're making excellent progress on your weak areas. Keep going with more Smart Sessions!`;
+    if (pct >= 50) return `Good progress! Review any incorrect answers, especially in ${focus || "your weak topics"}, then try another Smart Session.`;
+    return `These are tough topics — that's why they need the most practice. Focus on ${focus || "your weak areas"} and try again. You'll improve!`;
+  }
   if (pct >= 80) return `Brilliant work! You've mastered ${topic}. Try a harder topic next — you're ready!`;
   if (pct >= 50) return `Good effort! Review the questions you got wrong, then practise ${topic} one more time.`;
   return `Keep going — every expert was once a beginner! Focus on ${topic} basics and try again.`;
@@ -25,7 +33,8 @@ export default function ResultsScreen() {
   const insets = useSafeAreaInsets();
   const { profile, addSession } = useApp();
   const params = useLocalSearchParams<{
-    subject: string; topic: string; score: string; total: string; answers: string;
+    subject: string; topic: string; score: string; total: string;
+    answers: string; mode?: string; weakTopics?: string;
   }>();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -34,6 +43,8 @@ export default function ResultsScreen() {
   const total = parseInt(params.total ?? "0", 10);
   const subject = (params.subject ?? "maths") as "maths" | "english";
   const topic = params.topic ?? "Practice";
+  const isSmartSession = params.mode === "smart";
+  const weakTopicsPracticed = params.weakTopics ? params.weakTopics.split(",").filter(Boolean) : [];
   const answers: AnswerRecord[] = params.answers ? JSON.parse(params.answers) : [];
 
   const pct = total > 0 ? Math.round((score / total) * 100) : 0;
@@ -85,7 +96,11 @@ export default function ResultsScreen() {
             <Text style={[styles.pctPillTxt, { color: headerBg }]}>{pct}%</Text>
           </View>
         </Animated.View>
-        <Text style={styles.resultSub}>{profile?.name}'s {topic} session</Text>
+        <Text style={styles.resultSub}>
+          {isSmartSession
+            ? `${profile?.name}'s Smart Practice session`
+            : `${profile?.name}'s ${topic} session`}
+        </Text>
       </View>
 
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
@@ -134,13 +149,29 @@ export default function ResultsScreen() {
             </View>
           )}
 
+          {/* Smart session: weak topics practiced */}
+          {isSmartSession && weakTopicsPracticed.length > 0 && (
+            <View style={styles.smartInfoCard}>
+              <View style={styles.smartInfoHeader}>
+                <Ionicons name="flash" size={16} color={Colors.light.gold} />
+                <Text style={styles.smartInfoTitle}>Weak topics practised</Text>
+              </View>
+              {weakTopicsPracticed.map((t, i) => (
+                <View key={t} style={styles.smartTopicRow}>
+                  <View style={[styles.smartTopicDot, { backgroundColor: WEAK_COLORS[i] ?? Colors.light.textTertiary }]} />
+                  <Text style={styles.smartTopicText}>{t}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
           {/* Next steps */}
           <View style={[styles.nextCard, { borderLeftColor: resultColor }]}>
             <View style={[styles.nextCardHeader, { backgroundColor: resultColor + "18" }]}>
               <Ionicons name="navigate" size={16} color={resultColor} />
               <Text style={[styles.nextCardTitle, { color: resultColor }]}>What's next?</Text>
             </View>
-            <Text style={styles.nextCardBody}>{getNextSteps(pct, topic)}</Text>
+            <Text style={styles.nextCardBody}>{getNextSteps(pct, topic, isSmartSession, weakTopicsPracticed)}</Text>
           </View>
 
           {/* Actions */}
@@ -211,6 +242,16 @@ const styles = StyleSheet.create({
   miniBarFill: { height: "100%", borderRadius: 3 },
   miniPill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   miniPillTxt: { fontFamily: "Inter_700Bold", fontSize: 11, color: "#fff" },
+  smartInfoCard: {
+    backgroundColor: Colors.light.goldLight,
+    borderRadius: 18, padding: 14, gap: 10,
+    borderLeftWidth: 4, borderLeftColor: Colors.light.gold,
+  },
+  smartInfoHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  smartInfoTitle: { fontFamily: "Inter_700Bold", fontSize: 14, color: "#8B5E00" },
+  smartTopicRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  smartTopicDot: { width: 8, height: 8, borderRadius: 4 },
+  smartTopicText: { fontFamily: "Inter_500Medium", fontSize: 13, color: Colors.light.text },
   nextCard: {
     backgroundColor: Colors.light.card,
     borderRadius: 18,
