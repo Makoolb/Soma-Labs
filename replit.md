@@ -24,7 +24,7 @@ app/
   _layout.tsx          # Root layout — fonts, providers, Stack navigator
   index.tsx            # Redirect: onboarding → diagnostic → tabs
   onboarding.tsx       # 3-step onboarding: intro → name → grade → subject
-  diagnostic.tsx       # 10-question diagnostic quiz from data/questions.json
+  diagnostic.tsx       # 20-question diagnostic from data/diagnosticQuestions.json — builds SkillMap
   results.tsx          # Session results modal — score, breakdown, XP, next steps
   (tabs)/
     _layout.tsx        # Tab bar layout (NativeTabs + liquid glass fallback)
@@ -58,10 +58,20 @@ server/
 - `SessionResult`: `{ id, date, subject, topic, score, total, answers: AnswerRecord[] }`
 - `DiagnosticResult`: `{ date, mathsScore, mathsTotal, englishScore, englishTotal }`
 - `AnswerRecord`: `{ questionId, correct, topic, subject }`
+- `SkillMap`: `Record<string, number>` — topic name → percentage 0–100
+- `skillMapReady`: boolean — true just after diagnostic completes; triggers Home banner; cleared by `dismissSkillMapReady()`
 
-## Questions Bank (data/questions.json)
-~43 questions total — ~22 Maths, ~21 English — across P4, P5, P6, with:
-- `id`, `subject`, `grade`, `topic`, `question`, `options[]`, `correctIndex`, `explanation`
+## Question Banks
+### data/questions.json — Practice questions (206 total)
+- 186 Maths (P4/P5/P6) — from SomaLabs_Question_Bank_v4 — includes `subtopic`, `difficulty`, Socratic `explanation`
+- 20 English (mixed grades)
+- Fields: `id`, `subject`, `grade`, `theme`, `topic`, `subtopic`, `difficulty`, `question`, `options[]`, `correctIndex`, `explanation`
+
+### data/diagnosticQuestions.json — Diagnostic test questions (P4: 28, P5: 27, P6: 27)
+- Sourced from official diagnostic test sheets, mapped to 8 curriculum topic categories
+- Topics: Whole Numbers, Factors & Multiples, Fractions & Decimals, Percentages & Ratios, Algebra, Numbers & Powers, Measurement & Time, Geometry & Angles, Statistics & Probability
+- Fields: `id`, `grade`, `subtopic`, `topic`, `difficulty`, `question`, `options[]`, `correctIndex`, `explanation`
+- 20 questions picked per session with guaranteed topic coverage (≥1 from each topic)
 
 ## Design Rules
 - NEVER use emojis — use @expo/vector-icons only

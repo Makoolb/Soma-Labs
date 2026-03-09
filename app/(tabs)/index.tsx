@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Platform,
+  Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -13,19 +14,43 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors, { OPTION_COLORS } from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
-import questionsData from "@/data/questions.json";
 
 const QUICK_TOPICS = [
-  { subject: "maths" as const, topic: "Basic Operations", icon: "plus-minus-variant", color: Colors.light.optionB },
-  { subject: "english" as const, topic: "Grammar & Tenses", icon: "format-text", color: Colors.light.rust },
+  { subject: "maths" as const, topic: "Whole Numbers", icon: "numeric", color: Colors.light.optionB },
   { subject: "maths" as const, topic: "Fractions & Decimals", icon: "fraction-one-half", color: Colors.light.optionC },
-  { subject: "english" as const, topic: "Vocabulary & Spelling", icon: "alphabetical", color: Colors.light.optionD },
+  { subject: "maths" as const, topic: "Algebra", icon: "alpha-x-box-outline", color: Colors.light.optionA },
+  { subject: "maths" as const, topic: "Geometry & Angles", icon: "triangle-outline", color: Colors.light.optionD },
 ];
+
+// Sort skillMap entries by score ascending (weakest first)
+function getWeakTopics(skillMap: Record<string, number>, n: number) {
+  return Object.entries(skillMap)
+    .sort(([, a], [, b]) => a - b)
+    .slice(0, n);
+}
+
+const TOPIC_COLORS = [Colors.light.rust, Colors.light.gold, Colors.light.optionC];
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { profile, diagnosticResult, sessions, streakDays, totalXP } = useApp();
+  const { profile, diagnosticResult, skillMap, skillMapReady, dismissSkillMapReady, sessions, streakDays, totalXP } = useApp();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+
+  const bannerAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (skillMapReady) {
+      bannerAnim.setValue(0);
+      Animated.spring(bannerAnim, { toValue: 1, tension: 80, friction: 8, useNativeDriver: true }).start();
+    }
+  }, [skillMapReady]);
+
+  function handleDismissBanner() {
+    Haptics.selectionAsync();
+    Animated.timing(bannerAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+      dismissSkillMapReady();
+    });
+  }
 
   const recentSessions = sessions.slice(0, 4);
   const today = new Date().toDateString();
@@ -34,6 +59,8 @@ export default function HomeScreen() {
   const todayTotal = todaySessions.reduce((a, s) => a + s.total, 0);
   const level = Math.floor(totalXP / 100) + 1;
   const xpInLevel = totalXP % 100;
+
+  const weakTopics = skillMap ? getWeakTopics(skillMap, 3) : [];
 
   return (
     <ScrollView
@@ -51,10 +78,10 @@ export default function HomeScreen() {
             <Text style={styles.heroGreet}>Good day,</Text>
             <Text style={styles.heroName}>{profile?.name}</Text>
             <View style={styles.heroBadgeRow}>
-              <View style={[styles.badge, { backgroundColor: "rgba(255,255,255,0.22)" }]}>
+              <View style={styles.badge}>
                 <Text style={styles.badgeTxt}>{profile?.grade}</Text>
               </View>
-              <View style={[styles.badge, { backgroundColor: "rgba(255,255,255,0.22)" }]}>
+              <View style={styles.badge}>
                 <Text style={styles.badgeTxt}>{profile?.subject}</Text>
               </View>
             </View>
@@ -65,7 +92,6 @@ export default function HomeScreen() {
             <Text style={styles.streakLbl}>streak</Text>
           </View>
         </View>
-        {/* XP bar */}
         <View style={styles.xpWrap}>
           <View style={styles.xpLabelRow}>
             <Text style={styles.xpLbl}>Level {level}</Text>
@@ -77,6 +103,55 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {/* Skill Map Ready Banner */}
+      {skillMapReady && weakTopics.length > 0 && (
+        <Animated.View style={[
+          styles.skillBanner,
+          {
+            opacity: bannerAnim,
+            transform: [{ translateY: bannerAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }],
+          }
+        ]}>
+          <View style={styles.skillBannerHeader}>
+            <View style={styles.skillBannerIcon}>
+              <Ionicons name="map" size={22} color={Colors.light.navy} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.skillBannerTitle}>Your Skill Map is ready!</Text>
+              <Text style={styles.skillBannerSub}>Top 3 areas to focus on:</Text>
+            </View>
+            <TouchableOpacity onPress={handleDismissBanner} style={styles.bannerClose}>
+              <Ionicons name="close" size={18} color={Colors.light.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.weakTopicsRow}>
+            {weakTopics.map(([topic, pct], i) => (
+              <TouchableOpacity
+                key={topic}
+                style={[styles.weakChip, { borderColor: TOPIC_COLORS[i] }]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  router.push("/(tabs)/progress");
+                }}
+              >
+                <View style={[styles.weakDot, { backgroundColor: TOPIC_COLORS[i] }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.weakChipTopic, { color: TOPIC_COLORS[i] }]} numberOfLines={1}>{topic}</Text>
+                  <Text style={styles.weakChipPct}>{pct}%</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TouchableOpacity
+            style={styles.viewMapBtn}
+            onPress={() => { Haptics.selectionAsync(); handleDismissBanner(); router.push("/(tabs)/progress"); }}
+          >
+            <Text style={styles.viewMapBtnText}>View Full Skill Map</Text>
+            <Ionicons name="arrow-forward" size={14} color={Colors.light.navy} />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
       {/* Today's session */}
       <Text style={styles.sectionTitle}>Today's Session</Text>
       {todaySessions.length > 0 ? (
@@ -86,8 +161,14 @@ export default function HomeScreen() {
               <Text style={styles.todayLabel}>Sessions today: {todaySessions.length}</Text>
               <Text style={styles.todaySub}>Keep the momentum going!</Text>
             </View>
-            <View style={[styles.scoreCircle, { borderColor: todayTotal > 0 && todayScore / todayTotal >= 0.7 ? Colors.light.sage : Colors.light.gold }]}>
-              <Text style={[styles.scorePct, { color: todayTotal > 0 && todayScore / todayTotal >= 0.7 ? Colors.light.sage : Colors.light.gold }]}>
+            <View style={[styles.scoreCircle, {
+              borderColor: todayTotal > 0 && todayScore / todayTotal >= 0.7
+                ? Colors.light.sage : Colors.light.gold
+            }]}>
+              <Text style={[styles.scorePct, {
+                color: todayTotal > 0 && todayScore / todayTotal >= 0.7
+                  ? Colors.light.sage : Colors.light.gold
+              }]}>
                 {todayTotal > 0 ? Math.round((todayScore / todayTotal) * 100) : 0}%
               </Text>
             </View>
@@ -119,25 +200,29 @@ export default function HomeScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Diagnostic baseline */}
-      {diagnosticResult && (
+      {/* Skill Map summary (persistent, after notification dismissed) */}
+      {skillMap && !skillMapReady && (
         <>
-          <Text style={styles.sectionTitle}>Your Starting Level</Text>
-          <View style={styles.diagCard}>
-            {[
-              { label: "Maths", score: diagnosticResult.mathsScore, total: diagnosticResult.mathsTotal, color: Colors.light.optionB },
-              { label: "English", score: diagnosticResult.englishScore, total: diagnosticResult.englishTotal, color: Colors.light.rust },
-            ].map((d) => (
-              <View key={d.label} style={styles.diagRow}>
-                <View style={[styles.diagBadge, { backgroundColor: d.color }]}>
-                  <Text style={styles.diagBadgeTxt}>{d.label}</Text>
+          <View style={styles.sectionRow}>
+            <Text style={styles.sectionTitle}>Skill Map</Text>
+            <TouchableOpacity onPress={() => router.push("/(tabs)/progress")}>
+              <Text style={styles.seeAll}>Full report</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.skillCard}>
+            {getWeakTopics(skillMap, 3).map(([topic, pct], i) => {
+              const barColor = pct < 40 ? Colors.light.rust : pct < 70 ? Colors.light.gold : Colors.light.sage;
+              return (
+                <View key={topic} style={styles.skillRow}>
+                  <Text style={styles.skillTopic} numberOfLines={1}>{topic}</Text>
+                  <View style={styles.skillBarWrap}>
+                    <View style={[styles.skillBarFill, { width: `${pct}%`, backgroundColor: barColor }]} />
+                  </View>
+                  <Text style={[styles.skillPct, { color: barColor }]}>{pct}%</Text>
                 </View>
-                <View style={styles.diagBarWrap}>
-                  <View style={[styles.diagBarFill, { width: `${d.total > 0 ? (d.score / d.total) * 100 : 0}%`, backgroundColor: d.color }]} />
-                </View>
-                <Text style={[styles.diagScore, { color: d.color }]}>{d.score}/{d.total}</Text>
-              </View>
-            ))}
+              );
+            })}
+            <Text style={styles.skillHint}>These are your 3 weakest areas — focus on these first.</Text>
           </View>
         </>
       )}
@@ -159,7 +244,7 @@ export default function HomeScreen() {
               <MaterialCommunityIcons name={qt.icon as any} size={22} color="#fff" />
             </View>
             <Text style={styles.quickTopic} numberOfLines={2}>{qt.topic}</Text>
-            <Text style={[styles.quickSub, { color: qt.color }]}>{qt.subject === "maths" ? "Maths" : "English"}</Text>
+            <Text style={[styles.quickSub, { color: qt.color }]}>Maths</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -206,29 +291,19 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.light.background },
   content: { paddingHorizontal: 16, gap: 14 },
-  hero: {
-    backgroundColor: Colors.light.navy,
-    borderRadius: 26,
-    padding: 20,
-    gap: 16,
-  },
+  hero: { backgroundColor: Colors.light.navy, borderRadius: 26, padding: 20, gap: 16 },
   heroTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   heroText: { gap: 3 },
   heroGreet: { fontFamily: "Inter_400Regular", fontSize: 13, color: "rgba(255,255,255,0.65)" },
   heroName: { fontFamily: "Inter_700Bold", fontSize: 28, color: "#fff" },
   heroBadgeRow: { flexDirection: "row", gap: 6, marginTop: 4 },
-  badge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  badge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: "rgba(255,255,255,0.22)" },
   badgeTxt: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: "#fff" },
   streakCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 72, height: 72, borderRadius: 36,
     backgroundColor: "rgba(255,255,255,0.12)",
-    borderWidth: 2,
-    borderColor: Colors.light.gold,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 1,
+    borderWidth: 2, borderColor: Colors.light.gold,
+    justifyContent: "center", alignItems: "center", gap: 1,
   },
   streakNum: { fontFamily: "Inter_700Bold", fontSize: 22, color: "#fff", lineHeight: 24 },
   streakLbl: { fontFamily: "Inter_400Regular", fontSize: 10, color: Colors.light.gold },
@@ -238,78 +313,69 @@ const styles = StyleSheet.create({
   xpVal: { fontFamily: "Inter_400Regular", fontSize: 12, color: "rgba(255,255,255,0.65)" },
   xpTrack: { height: 8, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 4, overflow: "hidden" },
   xpFill: { height: "100%", backgroundColor: Colors.light.gold, borderRadius: 4 },
+
+  // Skill Map Banner
+  skillBanner: {
+    backgroundColor: Colors.light.goldLight,
+    borderRadius: 22, padding: 16,
+    borderWidth: 2, borderColor: Colors.light.gold,
+    gap: 14,
+  },
+  skillBannerHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  skillBannerIcon: {
+    width: 44, height: 44, borderRadius: 12,
+    backgroundColor: Colors.light.gold + "30",
+    justifyContent: "center", alignItems: "center",
+  },
+  skillBannerTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: Colors.light.navy },
+  skillBannerSub: { fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary, marginTop: 2 },
+  bannerClose: { width: 32, height: 32, borderRadius: 10, backgroundColor: Colors.light.border, justifyContent: "center", alignItems: "center" },
+  weakTopicsRow: { gap: 8 },
+  weakChip: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: "#fff", borderRadius: 14, padding: 12, borderWidth: 2,
+  },
+  weakDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
+  weakChipTopic: { fontFamily: "Inter_700Bold", fontSize: 13 },
+  weakChipPct: { fontFamily: "Inter_400Regular", fontSize: 12, color: Colors.light.textSecondary, marginTop: 1 },
+  viewMapBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    backgroundColor: Colors.light.gold + "22",
+    borderRadius: 12, paddingVertical: 10,
+  },
+  viewMapBtnText: { fontFamily: "Inter_700Bold", fontSize: 14, color: Colors.light.navy },
+
+  // Skill Map compact summary
+  skillCard: { backgroundColor: Colors.light.card, borderRadius: 20, padding: 16, gap: 10 },
+  skillRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  skillTopic: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: Colors.light.text, width: 120 },
+  skillBarWrap: { flex: 1, height: 8, backgroundColor: Colors.light.border, borderRadius: 4, overflow: "hidden" },
+  skillBarFill: { height: "100%", borderRadius: 4 },
+  skillPct: { fontFamily: "Inter_700Bold", fontSize: 13, width: 38, textAlign: "right" },
+  skillHint: { fontFamily: "Inter_400Regular", fontSize: 12, color: Colors.light.textSecondary, marginTop: 2 },
+
   sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 17, color: Colors.light.navy, marginBottom: -6 },
   sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: -6 },
   seeAll: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: Colors.light.optionB },
-  todayCard: {
-    backgroundColor: Colors.light.card,
-    borderRadius: 22,
-    padding: 16,
-    gap: 12,
-    borderWidth: 2,
-    borderColor: Colors.light.border,
-  },
+  todayCard: { backgroundColor: Colors.light.card, borderRadius: 22, padding: 16, gap: 12, borderWidth: 2, borderColor: Colors.light.border },
   todayRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   todayLeft: { gap: 2 },
   todayLabel: { fontFamily: "Inter_700Bold", fontSize: 15, color: Colors.light.navy },
   todaySub: { fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary },
-  scoreCircle: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    borderWidth: 3,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  scoreCircle: { width: 62, height: 62, borderRadius: 31, borderWidth: 3, justifyContent: "center", alignItems: "center" },
   scorePct: { fontFamily: "Inter_700Bold", fontSize: 16 },
   continueBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: Colors.light.optionB,
-    borderRadius: 14,
-    paddingVertical: 12,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: Colors.light.optionB, borderRadius: 14, paddingVertical: 12,
   },
   continueBtnText: { fontFamily: "Inter_700Bold", fontSize: 14, color: "#fff" },
-  startCard: {
-    backgroundColor: Colors.light.card,
-    borderRadius: 22,
-    overflow: "hidden",
-    borderWidth: 2,
-    borderColor: Colors.light.border,
-  },
-  startCardInner: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    gap: 14,
-  },
-  startIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  startCard: { backgroundColor: Colors.light.card, borderRadius: 22, overflow: "hidden", borderWidth: 2, borderColor: Colors.light.border },
+  startCardInner: { flexDirection: "row", alignItems: "center", padding: 16, gap: 14 },
+  startIcon: { width: 56, height: 56, borderRadius: 16, justifyContent: "center", alignItems: "center" },
   startTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: Colors.light.navy },
   startSub: { fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary, marginTop: 2 },
-  diagCard: { backgroundColor: Colors.light.card, borderRadius: 20, padding: 16, gap: 12 },
-  diagRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  diagBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, width: 68, alignItems: "center" },
-  diagBadgeTxt: { fontFamily: "Inter_700Bold", fontSize: 12, color: "#fff" },
-  diagBarWrap: { flex: 1, height: 8, backgroundColor: Colors.light.border, borderRadius: 4, overflow: "hidden" },
-  diagBarFill: { height: "100%", borderRadius: 4 },
-  diagScore: { fontFamily: "Inter_700Bold", fontSize: 13, width: 32, textAlign: "right" },
   quickRow: { gap: 12, paddingBottom: 4 },
-  quickCard: {
-    width: 148,
-    backgroundColor: Colors.light.card,
-    borderRadius: 18,
-    padding: 14,
-    gap: 8,
-    overflow: "hidden",
-  },
+  quickCard: { width: 148, backgroundColor: Colors.light.card, borderRadius: 18, padding: 14, gap: 8, overflow: "hidden" },
   quickIcon: { width: 44, height: 44, borderRadius: 12, justifyContent: "center", alignItems: "center" },
   quickTopic: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: Colors.light.text, lineHeight: 18 },
   quickSub: { fontFamily: "Inter_700Bold", fontSize: 12 },

@@ -41,7 +41,7 @@ const barSt = StyleSheet.create({
 
 export default function ProgressScreen() {
   const insets = useSafeAreaInsets();
-  const { sessions, streakDays, totalXP, diagnosticResult, profile } = useApp();
+  const { sessions, streakDays, totalXP, diagnosticResult, skillMap: diagSkillMap, profile } = useApp();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 + 84 : 100;
 
@@ -114,28 +114,34 @@ export default function ProgressScreen() {
         </View>
       </View>
 
-      {/* Diagnostic baseline */}
-      {diagnosticResult && (
+      {/* Diagnostic Skill Map */}
+      {diagSkillMap && Object.keys(diagSkillMap).length > 0 && (
         <>
-          <Text style={styles.sectionTitle}>Starting Baseline</Text>
+          <View style={styles.sectionHeader}>
+            <View style={[styles.sectionDot, { backgroundColor: Colors.light.navy }]} />
+            <Text style={styles.sectionTitle}>Diagnostic Skill Map</Text>
+          </View>
           <View style={styles.card}>
-            {[
-              { label: "Maths", score: diagnosticResult.mathsScore, total: diagnosticResult.mathsTotal, color: Colors.light.optionB },
-              { label: "English", score: diagnosticResult.englishScore, total: diagnosticResult.englishTotal, color: Colors.light.rust },
-            ].map((d, i) => (
-              <View key={d.label}>
-                {i > 0 && <View style={styles.divider} />}
-                <View style={styles.diagRow}>
-                  <View style={[styles.diagBadge, { backgroundColor: d.color }]}>
-                    <Text style={styles.diagBadgeTxt}>{d.label}</Text>
+            {Object.entries(diagSkillMap)
+              .sort(([, a], [, b]) => a - b)
+              .map(([topic, pct], i) => {
+                const barColor = pct >= 70 ? Colors.light.sage : pct >= 40 ? Colors.light.gold : Colors.light.rust;
+                return (
+                  <View key={topic}>
+                    {i > 0 && <View style={styles.divider} />}
+                    <View style={styles.diagRow}>
+                      <Text style={styles.diagTopic} numberOfLines={1}>{topic}</Text>
+                      <View style={styles.diagBarWrap}>
+                        <View style={[styles.diagBarFill, { width: `${pct}%`, backgroundColor: barColor }]} />
+                      </View>
+                      <View style={[styles.diagPill, { backgroundColor: barColor }]}>
+                        <Text style={styles.diagPillTxt}>{pct}%</Text>
+                      </View>
+                    </View>
                   </View>
-                  <View style={styles.diagBarWrap}>
-                    <View style={[styles.diagBarFill, { width: `${d.total > 0 ? (d.score / d.total) * 100 : 0}%`, backgroundColor: d.color }]} />
-                  </View>
-                  <Text style={[styles.diagFrac, { color: d.color }]}>{d.score}/{d.total}</Text>
-                </View>
-              </View>
-            ))}
+                );
+              })}
+            <Text style={styles.diagHint}>Sorted by weakest first — focus on red and orange topics.</Text>
           </View>
         </>
       )}
@@ -272,11 +278,12 @@ const styles = StyleSheet.create({
   card: { backgroundColor: Colors.light.card, borderRadius: 20, padding: 16, gap: 12 },
   divider: { height: 1, backgroundColor: Colors.light.border },
   diagRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  diagBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, width: 70, alignItems: "center" },
-  diagBadgeTxt: { fontFamily: "Inter_700Bold", fontSize: 12, color: "#fff" },
+  diagTopic: { fontFamily: "Inter_500Medium", fontSize: 12, color: Colors.light.text, width: 108 },
   diagBarWrap: { flex: 1, height: 8, backgroundColor: Colors.light.border, borderRadius: 4, overflow: "hidden" },
   diagBarFill: { height: "100%", borderRadius: 4 },
-  diagFrac: { fontFamily: "Inter_700Bold", fontSize: 13, width: 32, textAlign: "right" },
+  diagPill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, minWidth: 40, alignItems: "center" },
+  diagPillTxt: { fontFamily: "Inter_700Bold", fontSize: 12, color: "#fff" },
+  diagHint: { fontFamily: "Inter_400Regular", fontSize: 12, color: Colors.light.textSecondary, marginTop: 2 },
   histRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   histIcon: { width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center" },
   histInfo: { flex: 1 },

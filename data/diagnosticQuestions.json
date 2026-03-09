@@ -1,0 +1,1320 @@
+{
+  "P4": [
+    {
+      "id": "diag_P4_01",
+      "grade": "P4",
+      "subtopic": "Place Values",
+      "topic": "Whole Numbers",
+      "difficulty": "Regular",
+      "question": "What is the place value of 6 in 4,632?",
+      "options": [
+        "Ones",
+        "Tens",
+        "Hundreds",
+        "Thousands"
+      ],
+      "correctIndex": 2,
+      "explanation": "Think of a number like a block of flats — each digit lives on a different floor.\nIn 4,632: the 4 is on floor Thousands, the 6 on floor Hundreds, the 3 on floor Tens, the 2 on floor Ones.\nWhich floor is 6 on? Hundreds! Value = 6 × 100 = 600.\n✓ Check: 4,000 + 600 + 30 + 2 = 4,632. Correct!"
+    },
+    {
+      "id": "diag_P4_02",
+      "grade": "P4",
+      "subtopic": "Roman Numerals",
+      "topic": "Whole Numbers",
+      "difficulty": "Regular",
+      "question": "What is XVIII in Hindu-Arabic numerals?",
+      "options": [
+        "13",
+        "17",
+        "18",
+        "28"
+      ],
+      "correctIndex": 2,
+      "explanation": "Decode XVIII like a secret message.\nX = 10. V = 5. Each I = 1.\nXVIII = 10 + 5 + 1 + 1 + 1 = 18.\n✓ Check: 18 in Roman is XVIII. Correct!"
+    },
+    {
+      "id": "diag_P4_03",
+      "grade": "P4",
+      "subtopic": "Product of Prime Factors",
+      "topic": "Factors & Multiples",
+      "difficulty": "Regular",
+      "question": "Express 12 as a product of prime factors.",
+      "options": [
+        "2×6",
+        "2×2×3",
+        "3×4",
+        "2×3×3"
+      ],
+      "correctIndex": 1,
+      "explanation": "Primes are the 'building block' numbers — they can't be split further.\nBreak 12: 12 = 2 × 6. Is 6 prime? No! Split again: 6 = 2 × 3.\nNow every piece is prime: 12 = 2 × 2 × 3.\n✓ Check: 2 × 2 × 3 = 12. Correct!"
+    },
+    {
+      "id": "diag_P4_04",
+      "grade": "P4",
+      "subtopic": "Ordering Numbers",
+      "topic": "Whole Numbers",
+      "difficulty": "Regular",
+      "question": "Arrange in ascending order: 1,320 ; 1,230 ; 1,302 ; 1,023",
+      "options": [
+        "1,023 < 1,230 < 1,302 < 1,320",
+        "1,320 < 1,302 < 1,230 < 1,023",
+        "1,023 < 1,302 < 1,230 < 1,320",
+        "1,230 < 1,023 < 1,320 < 1,302"
+      ],
+      "correctIndex": 0,
+      "explanation": "Ascending = going UP, like climbing stairs — smallest first.\nAll four start with 1,___. Compare the hundreds digit: 0 < 2 < 3.\n1,023 < 1,230 < 1,302 < 1,320.\n✓ Check: each number is bigger than the one before it."
+    },
+    {
+      "id": "diag_P4_05",
+      "grade": "P4",
+      "subtopic": "LCM",
+      "topic": "Factors & Multiples",
+      "difficulty": "Regular",
+      "question": "What is the LCM of 4 and 6?",
+      "options": [
+        "12",
+        "18",
+        "24",
+        "8"
+      ],
+      "correctIndex": 0,
+      "explanation": "Imagine Amaka and Bisi hopping along a number line.\nAmaka hops in 4s: 4, 8, 12. Bisi hops in 6s: 6, 12.\nFirst spot they BOTH land on = 12. That's the LCM!\n✓ Check: 12 ÷ 4 = 3 ✓, 12 ÷ 6 = 2 ✓. Both divide in exactly."
+    },
+    {
+      "id": "diag_P4_06",
+      "grade": "P4",
+      "subtopic": "HCF",
+      "topic": "Factors & Multiples",
+      "difficulty": "Regular",
+      "question": "What is the HCF of 18 and 24?",
+      "options": [
+        "3",
+        "4",
+        "6",
+        "9"
+      ],
+      "correctIndex": 2,
+      "explanation": "List every number that divides into 18 and into 24 with no leftover.\nFriends of 18: 1, 2, 3, 6, 9, 18.\nFriends of 24: 1, 2, 3, 4, 6, 8, 12, 24.\nBiggest friend in BOTH lists = 6.\n✓ Check: 18 ÷ 6 = 3 ✓, 24 ÷ 6 = 4 ✓."
+    },
+    {
+      "id": "diag_P4_07",
+      "grade": "P4",
+      "subtopic": "Metres to Kilometres",
+      "topic": "Measurement & Time",
+      "difficulty": "Regular",
+      "question": "Express 500 m in kilometres.",
+      "options": [
+        "50 km",
+        "5 km",
+        "0.5 km",
+        "0.05 km"
+      ],
+      "correctIndex": 2,
+      "explanation": "1 km = 1,000 m. To change metres to km, divide by 1,000.\n500 ÷ 1,000 = 0.5 km. (Move the decimal 3 places left.)\n✓ Check: 0.5 × 1,000 = 500 m. We're back!"
+    },
+    {
+      "id": "diag_P4_08",
+      "grade": "P4",
+      "subtopic": "Seconds and Minutes",
+      "topic": "Measurement & Time",
+      "difficulty": "Regular",
+      "question": "How many seconds are in 3 minutes?",
+      "options": [
+        "120",
+        "150",
+        "180",
+        "200"
+      ],
+      "correctIndex": 2,
+      "explanation": "1 minute = 60 seconds. For 3 minutes, count three 60s.\n60 + 60 + 60 = 180 seconds. Or multiply: 3 × 60 = 180.\n✓ Check: 180 ÷ 60 = 3 minutes. Correct!"
+    },
+    {
+      "id": "diag_P4_09",
+      "grade": "P4",
+      "subtopic": "Equivalent Fractions",
+      "topic": "Fractions & Decimals",
+      "difficulty": "Regular",
+      "question": "Find x: 2/5 = x/15",
+      "options": [
+        "5",
+        "6",
+        "8",
+        "9"
+      ],
+      "correctIndex": 1,
+      "explanation": "Equivalent fractions = same amount, different names — like the same piece of suya on a bigger skewer.\n2/5: to get 15 at the bottom (5 × 3), multiply the top by 3 too: 2 × 3 = 6.\nSo x = 6.\n✓ Check: 6/15 ÷ 3 = 2/5. Same fraction!"
+    },
+    {
+      "id": "diag_P4_10",
+      "grade": "P4",
+      "subtopic": "Percentages",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Regular",
+      "question": "What is 10% of 250?",
+      "options": [
+        "2.5",
+        "20",
+        "25",
+        "250"
+      ],
+      "correctIndex": 2,
+      "explanation": "10% is the easiest percentage — just divide by 10!\n250 ÷ 10 = 25.\n✓ Check: 25 × 10 = 250. We get the whole back."
+    },
+    {
+      "id": "diag_P4_11",
+      "grade": "P4",
+      "subtopic": "Percentages as Fractions",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Regular",
+      "question": "Express 50% as a fraction in lowest terms.",
+      "options": [
+        "50/100",
+        "5/10",
+        "1/2",
+        "2/4"
+      ],
+      "correctIndex": 2,
+      "explanation": "% means 'out of 100'. So 50% = 50/100.\nSimplify: both 50 and 100 divide by 50 → 1/2.\n✓ Check: 1/2 × 100 = 50%. Back to the percentage!"
+    },
+    {
+      "id": "diag_P4_12",
+      "grade": "P4",
+      "subtopic": "Ratios",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Regular",
+      "question": "Share ₦300 in the ratio 1:2. What is the larger share?",
+      "options": [
+        "₦100",
+        "₦150",
+        "₦200",
+        "₦250"
+      ],
+      "correctIndex": 2,
+      "explanation": "Ratio 1:2 → total parts = 1 + 2 = 3.\nEach part = ₦300 ÷ 3 = ₦100.\nLarger share gets 2 parts = 2 × ₦100 = ₦200.\n✓ Check: ₦100 + ₦200 = ₦300. Total is correct!"
+    },
+    {
+      "id": "diag_P4_13",
+      "grade": "P4",
+      "subtopic": "Factors of a Number",
+      "topic": "Factors & Multiples",
+      "difficulty": "Regular",
+      "question": "Which is a factor of 24?",
+      "options": [
+        "7",
+        "8",
+        "9",
+        "11"
+      ],
+      "correctIndex": 1,
+      "explanation": "A factor divides into a number exactly — no leftover bits.\n24 ÷ 8 = 3. No remainder! ✓\n24 ÷ 7 = 3.43... ✗. 24 ÷ 9 = 2.67... ✗.\n✓ Check: 8 × 3 = 24. Exact!"
+    },
+    {
+      "id": "diag_P4_14",
+      "grade": "P4",
+      "subtopic": "Prime Numbers",
+      "topic": "Factors & Multiples",
+      "difficulty": "Regular",
+      "question": "Which number is prime?",
+      "options": [
+        "21",
+        "25",
+        "29",
+        "33"
+      ],
+      "correctIndex": 2,
+      "explanation": "A prime has EXACTLY two friends: 1 and itself.\n21 = 3×7 ✗. 25 = 5×5 ✗. 33 = 3×11 ✗.\n29: try 2, 3, 5, 7 — none work! So 29 is prime.\n✓ Check: √29 ≈ 5.4. We only need to test up to 5. None divide 29. Prime!"
+    },
+    {
+      "id": "diag_P4_15",
+      "grade": "P4",
+      "subtopic": "Volume with Mixed Units",
+      "topic": "Measurement & Time",
+      "difficulty": "Regular",
+      "question": "A box is 4 m long, 3 m wide, 2 m tall. What is its volume?",
+      "options": [
+        "9 m³",
+        "14 m³",
+        "24 m³",
+        "48 m³"
+      ],
+      "correctIndex": 2,
+      "explanation": "Volume = length × width × height — how many small cubes fit inside the box.\n4 × 3 × 2 = 24 m³.\n✓ Check: 24 ÷ 4 ÷ 3 = 2 m (the height). Correct!"
+    },
+    {
+      "id": "diag_P4_16",
+      "grade": "P4",
+      "subtopic": "Squares and Square roots",
+      "topic": "Numbers & Powers",
+      "difficulty": "Regular",
+      "question": "What is √81?",
+      "options": [
+        "7",
+        "8",
+        "9",
+        "11"
+      ],
+      "correctIndex": 2,
+      "explanation": "Square root = the reverse of squaring. Ask: what × what = 81?\n9 × 9 = 81. So √81 = 9.\n✓ Check: 9² = 81. We get back to where we started!"
+    },
+    {
+      "id": "diag_P4_17",
+      "grade": "P4",
+      "subtopic": "Cubes and Index Notation",
+      "topic": "Numbers & Powers",
+      "difficulty": "Regular",
+      "question": "What is 3³?",
+      "options": [
+        "6",
+        "9",
+        "18",
+        "27"
+      ],
+      "correctIndex": 3,
+      "explanation": "3³ means multiply 3 by itself three times — like measuring a cube.\n3 × 3 = 9. Then 9 × 3 = 27.\n✓ Check: 27 ÷ 3 = 9. 9 ÷ 3 = 3. We can undo it!"
+    },
+    {
+      "id": "diag_P4_18",
+      "grade": "P4",
+      "subtopic": "Decimal Place Value",
+      "topic": "Whole Numbers",
+      "difficulty": "Regular",
+      "question": "In 5.46, what is the value of the digit 4?",
+      "options": [
+        "4 ones",
+        "4 tens",
+        "4 tenths",
+        "4 hundredths"
+      ],
+      "correctIndex": 2,
+      "explanation": "After the decimal point: 1st column = tenths, 2nd = hundredths.\nIn 5.46: the 4 is in the FIRST column after the decimal → tenths. Value = 0.4.\n✓ Check: 5 + 0.4 + 0.06 = 5.46. The 4 gives us 4 tenths."
+    },
+    {
+      "id": "diag_P4_19",
+      "grade": "P4",
+      "subtopic": "Adding Lengths with Decimals",
+      "topic": "Fractions & Decimals",
+      "difficulty": "Regular",
+      "question": "Add: 3.5 m + 1.25 m + 50 cm. Give answer in metres.",
+      "options": [
+        "4.75 m",
+        "5.15 m",
+        "5.25 m",
+        "5.75 m"
+      ],
+      "correctIndex": 2,
+      "explanation": "Convert 50 cm to metres first: 50 ÷ 100 = 0.50 m.\nNow add in metres: 3.50 + 1.25 + 0.50 = 5.25 m.\n✓ Check: 5.25 − 0.50 − 1.25 = 3.50 m. Correct!"
+    },
+    {
+      "id": "diag_P4_20",
+      "grade": "P4",
+      "subtopic": "Perimeter of Rectangle",
+      "topic": "Geometry & Angles",
+      "difficulty": "Regular",
+      "question": "A rectangle is 9 cm long and 4 cm wide. What is its perimeter?",
+      "options": [
+        "13 cm",
+        "26 cm",
+        "32 cm",
+        "36 cm"
+      ],
+      "correctIndex": 1,
+      "explanation": "Perimeter = total distance around the outside — like placing a fence around a field.\nP = 2 × (length + width) = 2 × (9 + 4) = 2 × 13 = 26 cm.\n✓ Check: 9 + 4 + 9 + 4 = 26 cm. Same answer!"
+    },
+    {
+      "id": "diag_P4_21",
+      "grade": "P4",
+      "subtopic": "Area",
+      "topic": "Geometry & Angles",
+      "difficulty": "Regular",
+      "question": "A square has sides of 7 cm. What is its area?",
+      "options": [
+        "14 cm²",
+        "28 cm²",
+        "49 cm²",
+        "56 cm²"
+      ],
+      "correctIndex": 2,
+      "explanation": "Area of a square = side × side (all sides are equal).\n7 × 7 = 49 cm².\n✓ Check: √49 = 7. That's the side length. Correct!"
+    },
+    {
+      "id": "diag_P4_22",
+      "grade": "P4",
+      "subtopic": "Solving Simple Equations",
+      "topic": "Algebra",
+      "difficulty": "Regular",
+      "question": "Find x: x + 8 = 15",
+      "options": [
+        "5",
+        "6",
+        "7",
+        "8"
+      ],
+      "correctIndex": 2,
+      "explanation": "Think of a balance scale. x + 8 = 15.\nTo find x, take 8 away from both sides: x = 15 − 8 = 7.\n✓ Check: 7 + 8 = 15. Balanced!"
+    },
+    {
+      "id": "diag_P4_23",
+      "grade": "P4",
+      "subtopic": "Numbers in Words",
+      "topic": "Whole Numbers",
+      "difficulty": "Regular",
+      "question": "Write 4,250 in words.",
+      "options": [
+        "Four hundred and twenty-five",
+        "Four thousand two hundred and fifty",
+        "Four thousand and twenty-five",
+        "Forty-two thousand fifty"
+      ],
+      "correctIndex": 1,
+      "explanation": "Read left to right: 4,250.\n4 thousands = 'four thousand'. 2 hundreds = 'two hundred'. 5 tens = 'fifty'.\nFull name: four thousand, two hundred and fifty.\n✓ Check: say it aloud — it gives you 4,250."
+    },
+    {
+      "id": "diag_P4_24",
+      "grade": "P4",
+      "subtopic": "Days and Weeks",
+      "topic": "Measurement & Time",
+      "difficulty": "Regular",
+      "question": "How many weeks are in 28 days?",
+      "options": [
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "correctIndex": 1,
+      "explanation": "7 days = 1 week. Divide to find weeks.\n28 ÷ 7 = 4 weeks.\n✓ Check: 4 × 7 = 28 days. Correct!"
+    },
+    {
+      "id": "diag_P4_25",
+      "grade": "P4",
+      "subtopic": "Data Analysis with bar graphs",
+      "topic": "Statistics & Probability",
+      "difficulty": "Regular",
+      "question": "Scores in 5 tests: 60, 75, 80, 55, 90. What is the total?",
+      "options": [
+        "350",
+        "355",
+        "360",
+        "365"
+      ],
+      "correctIndex": 2,
+      "explanation": "Add all five scores in pairs to make it easy.\n60 + 80 = 140. 75 + 55 = 130. 140 + 130 = 270. Add 90: 270 + 90 = 360.\n✓ Check: 360 ÷ 5 = 72 average. Sounds right for scores in the 60s–90s range."
+    },
+    {
+      "id": "diag_P4_26",
+      "grade": "P4",
+      "subtopic": "Decimals",
+      "topic": "Fractions & Decimals",
+      "difficulty": "Hard",
+      "question": "Mama buys fabric: 2.75 m on Monday, 1.8 m on Thursday. She had 6 m. How much is left?",
+      "options": [
+        "1.45 m",
+        "1.55 m",
+        "2.45 m",
+        "3.45 m"
+      ],
+      "correctIndex": 0,
+      "explanation": "Mama started with 6 m. Add what she cut: 2.75 + 1.80 = 4.55 m used.\nRemaining = 6.00 − 4.55 = 1.45 m.\n✓ Check: 4.55 + 1.45 = 6.00 m. The full piece is accounted for!"
+    },
+    {
+      "id": "diag_P4_27",
+      "grade": "P4",
+      "subtopic": "Fractions of Quantities",
+      "topic": "Fractions & Decimals",
+      "difficulty": "Hard",
+      "question": "What fraction of 2 minutes is 30 seconds?",
+      "options": [
+        "1/3",
+        "1/4",
+        "1/6",
+        "1/8"
+      ],
+      "correctIndex": 1,
+      "explanation": "2 minutes = 2 × 60 = 120 seconds.\n30 out of 120: write as fraction 30/120.\nSimplify ÷ 30: = 1/4.\n✓ Check: 1/4 of 120 = 30 seconds. Correct!"
+    },
+    {
+      "id": "diag_P4_28",
+      "grade": "P4",
+      "subtopic": "Number Properties",
+      "topic": "Whole Numbers",
+      "difficulty": "Hard",
+      "question": "Which number between 40 and 50 is both even and a multiple of 7?",
+      "options": [
+        "42",
+        "44",
+        "48",
+        "49"
+      ],
+      "correctIndex": 0,
+      "explanation": "We need a number between 40 and 50 that is BOTH even AND a multiple of 7.\nMultiples of 7 in range: 42, 49.\nIs 42 even? Yes ✓. Is 49 even? No ✗.\nAnswer = 42.\n✓ Check: 42 = 6 × 7. Even and a multiple of 7!"
+    }
+  ],
+  "P5": [
+    {
+      "id": "diag_P5_01",
+      "grade": "P5",
+      "subtopic": "BODMAS",
+      "topic": "Algebra",
+      "difficulty": "Regular",
+      "question": "Calculate: 5 + 3 × 4",
+      "options": [
+        "17",
+        "20",
+        "32",
+        "12"
+      ],
+      "correctIndex": 0,
+      "explanation": "BODMAS says multiplication jumps the queue before addition.\nIn 5 + 3 × 4: do 3 × 4 = 12 first. Then 5 + 12 = 17.\nDon't do 5 + 3 = 8 first — that's the wrong order!\n✓ Check: the × always comes before the + in BODMAS."
+    },
+    {
+      "id": "diag_P5_02",
+      "grade": "P5",
+      "subtopic": "Positive and negative integers",
+      "topic": "Numbers & Powers",
+      "difficulty": "Regular",
+      "question": "What is −5 + 9?",
+      "options": [
+        "−4",
+        "4",
+        "14",
+        "−14"
+      ],
+      "correctIndex": 1,
+      "explanation": "Think of a number line like a street. Negative numbers are to the LEFT of zero.\nStart at −5. Walk 9 steps RIGHT: −5→−4→−3→−2→−1→0→+1→+2→+3→+4.\nYou land on +4.\n✓ Check: −5 + 9 = +4. Correct!"
+    },
+    {
+      "id": "diag_P5_03",
+      "grade": "P5",
+      "subtopic": "Percentages",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Regular",
+      "question": "Find 30% of 120.",
+      "options": [
+        "30",
+        "36",
+        "40",
+        "42"
+      ],
+      "correctIndex": 1,
+      "explanation": "10% of 120 is easy — just divide by 10: 12.\nFor 30%: that's 3 × 10% = 3 × 12 = 36.\n✓ Check: 36/120 × 100 = 30%. Correct!"
+    },
+    {
+      "id": "diag_P5_04",
+      "grade": "P5",
+      "subtopic": "Ratios",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Regular",
+      "question": "Share ₦500 in ratio 2:3. What is the smaller share?",
+      "options": [
+        "₦150",
+        "₦200",
+        "₦250",
+        "₦300"
+      ],
+      "correctIndex": 1,
+      "explanation": "Ratio 2:3 → total parts = 5. Each part = ₦500 ÷ 5 = ₦100.\nSmaller share (2 parts) = 2 × ₦100 = ₦200.\n✓ Check: ₦200 + ₦300 = ₦500. Total is right!"
+    },
+    {
+      "id": "diag_P5_05",
+      "grade": "P5",
+      "subtopic": "Simplifying Expressions",
+      "topic": "Algebra",
+      "difficulty": "Regular",
+      "question": "Simplify: 7y + 3y − 2y",
+      "options": [
+        "8y",
+        "9y",
+        "10y",
+        "12y"
+      ],
+      "correctIndex": 0,
+      "explanation": "Collect all the 'y' terms like sorting the same type of sweet into one jar.\n7y + 3y − 2y = (7 + 3 − 2)y = 8y.\n✓ Check: if y = 1, then 7+3−2 = 8. Correct!"
+    },
+    {
+      "id": "diag_P5_06",
+      "grade": "P5",
+      "subtopic": "Substitution",
+      "topic": "Algebra",
+      "difficulty": "Regular",
+      "question": "Find 3x + 2 when x = 4.",
+      "options": [
+        "10",
+        "12",
+        "14",
+        "16"
+      ],
+      "correctIndex": 2,
+      "explanation": "Substitution = swap the letter for its value — open the mystery bag!\n3x + 2 with x = 4: 3(4) + 2 = 12 + 2 = 14.\n(Remember BODMAS: multiply before adding!)\n✓ Check: 14 − 2 = 12 = 3 × 4. Correct!"
+    },
+    {
+      "id": "diag_P5_07",
+      "grade": "P5",
+      "subtopic": "Solving Simple Equations",
+      "topic": "Algebra",
+      "difficulty": "Regular",
+      "question": "Solve: 3n − 5 = 10",
+      "options": [
+        "4",
+        "5",
+        "6",
+        "7"
+      ],
+      "correctIndex": 1,
+      "explanation": "3n − 5 = 10. Add 5 to both sides (undo the subtraction): 3n = 15.\nDivide by 3: n = 5.\n✓ Check: 3(5) − 5 = 15 − 5 = 10. Correct!"
+    },
+    {
+      "id": "diag_P5_08",
+      "grade": "P5",
+      "subtopic": "Angle Classification",
+      "topic": "Geometry & Angles",
+      "difficulty": "Regular",
+      "question": "Which angle type is 95°?",
+      "options": [
+        "Acute",
+        "Right",
+        "Obtuse",
+        "Reflex"
+      ],
+      "correctIndex": 2,
+      "explanation": "Angles have sizes like opening a door. Acute < 90°. Right = 90°. Obtuse: between 90° and 180°. Reflex > 180°.\n95° is just past a right angle → OBTUSE.\n✓ Check: 90 < 95 < 180. Obtuse confirmed!"
+    },
+    {
+      "id": "diag_P5_09",
+      "grade": "P5",
+      "subtopic": "Lines of Symmetry",
+      "topic": "Geometry & Angles",
+      "difficulty": "Regular",
+      "question": "How many lines of symmetry does an equilateral triangle have?",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "correctIndex": 2,
+      "explanation": "An equilateral triangle has 3 equal sides and 3 equal angles.\nYou can fold it perfectly in half through each vertex — that's 3 different fold lines.\n3 lines of symmetry!\n✓ Check: 3 equal sides = 3 lines of symmetry."
+    },
+    {
+      "id": "diag_P5_10",
+      "grade": "P5",
+      "subtopic": "Average speed, distance and time",
+      "topic": "Measurement & Time",
+      "difficulty": "Regular",
+      "question": "A car travels 240 km in 4 hours. What is its speed?",
+      "options": [
+        "50 km/h",
+        "60 km/h",
+        "80 km/h",
+        "120 km/h"
+      ],
+      "correctIndex": 1,
+      "explanation": "Speed = how far you travel in ONE hour.\nDistance ÷ Time = 240 ÷ 4 = 60 km/h.\n✓ Check: 60 × 4 = 240 km. Arrives at the right distance!"
+    },
+    {
+      "id": "diag_P5_11",
+      "grade": "P5",
+      "subtopic": "Pythagorean theorem",
+      "topic": "Geometry & Angles",
+      "difficulty": "Regular",
+      "question": "A right triangle has legs 5 cm and 12 cm. What is the hypotenuse?",
+      "options": [
+        "13 cm",
+        "14 cm",
+        "15 cm",
+        "17 cm"
+      ],
+      "correctIndex": 0,
+      "explanation": "Pythagoras: short² + other² = hypotenuse².\n5² + 12² = 25 + 144 = 169. Hypotenuse = √169 = 13 cm.\n✓ Check: 13² = 169 = 25 + 144. Correct!"
+    },
+    {
+      "id": "diag_P5_12",
+      "grade": "P5",
+      "subtopic": "Probability",
+      "topic": "Statistics & Probability",
+      "difficulty": "Regular",
+      "question": "A bag has 3 red and 7 blue balls. What is P(red)?",
+      "options": [
+        "3/7",
+        "3/10",
+        "7/10",
+        "1/3"
+      ],
+      "correctIndex": 1,
+      "explanation": "P(red) = red balls ÷ total balls.\n3 red out of (3+7) = 10 total.\nP = 3/10.\n✓ Check: 3/10 + 7/10 = 1. The probabilities add to 1. Correct!"
+    },
+    {
+      "id": "diag_P5_13",
+      "grade": "P5",
+      "subtopic": "Mode/frequency, median, mean",
+      "topic": "Statistics & Probability",
+      "difficulty": "Regular",
+      "question": "Find the mode of: 4, 7, 4, 9, 4, 7, 3",
+      "options": [
+        "3",
+        "4",
+        "7",
+        "9"
+      ],
+      "correctIndex": 1,
+      "explanation": "The MODE is the most popular number — the one showing up most often at the party!\nCount: 4 appears 3 times (most!), 7 twice, 9 once, 3 once.\nMode = 4.\n✓ Check: no other number appears 3 or more times. Mode is 4."
+    },
+    {
+      "id": "diag_P5_14",
+      "grade": "P5",
+      "subtopic": "Transactions",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Regular",
+      "question": "Buy 4 pens at ₦85 each. Pay ₦500. Change?",
+      "options": [
+        "₦160",
+        "₦150",
+        "₦140",
+        "₦130"
+      ],
+      "correctIndex": 0,
+      "explanation": "4 pens × ₦85 = ₦340 spent.\nChange = ₦500 − ₦340 = ₦160.\n✓ Check: ₦340 + ₦160 = ₦500. Exactly the right amount paid!"
+    },
+    {
+      "id": "diag_P5_15",
+      "grade": "P5",
+      "subtopic": "Long Multiplication",
+      "topic": "Whole Numbers",
+      "difficulty": "Regular",
+      "question": "Work out 246 × 35.",
+      "options": [
+        "8,410",
+        "8,610",
+        "8,910",
+        "9,010"
+      ],
+      "correctIndex": 1,
+      "explanation": "Split 35 into 30 + 5 — easier to work with.\n246 × 30 = 7,380. 246 × 5 = 1,230.\nAdd: 7,380 + 1,230 = 8,610.\n✓ Check: 8,610 ÷ 35 = 246. Correct!"
+    },
+    {
+      "id": "diag_P5_16",
+      "grade": "P5",
+      "subtopic": "Long Division",
+      "topic": "Whole Numbers",
+      "difficulty": "Regular",
+      "question": "252 ÷ 9 = ?",
+      "options": [
+        "26",
+        "27",
+        "28",
+        "29"
+      ],
+      "correctIndex": 2,
+      "explanation": "Ask: 9 × what = 252?\nBuild up: 9 × 20 = 180. 9 × 8 = 72. 180 + 72 = 252.\nSo 252 ÷ 9 = 28.\n✓ Check: 28 × 9 = 252. Correct!"
+    },
+    {
+      "id": "diag_P5_17",
+      "grade": "P5",
+      "subtopic": "Fractions of Quantities",
+      "topic": "Fractions & Decimals",
+      "difficulty": "Regular",
+      "question": "What fraction of 1 minute is 20 seconds?",
+      "options": [
+        "1/3",
+        "1/4",
+        "1/5",
+        "1/6"
+      ],
+      "correctIndex": 0,
+      "explanation": "1 minute = 60 seconds. 20 seconds out of 60 = 20/60.\nSimplify ÷ 20: = 1/3.\n✓ Check: 1/3 of 60 = 20 seconds. Correct!"
+    },
+    {
+      "id": "diag_P5_18",
+      "grade": "P5",
+      "subtopic": "Percentage increase/decrease",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Regular",
+      "question": "A price rises from ₦400 to ₦480. What is the % increase?",
+      "options": [
+        "15%",
+        "18%",
+        "20%",
+        "25%"
+      ],
+      "correctIndex": 2,
+      "explanation": "Percentage increase = (increase ÷ original) × 100.\nIncrease = ₦480 − ₦400 = ₦80.\n80 ÷ 400 × 100 = 20%.\n✓ Check: 20% of ₦400 = ₦80. ₦400 + ₦80 = ₦480. Correct!"
+    },
+    {
+      "id": "diag_P5_19",
+      "grade": "P5",
+      "subtopic": "Squares of whole numbers more than 50",
+      "topic": "Numbers & Powers",
+      "difficulty": "Regular",
+      "question": "What is 13²?",
+      "options": [
+        "156",
+        "169",
+        "179",
+        "196"
+      ],
+      "correctIndex": 1,
+      "explanation": "13² = 13 × 13. Break it: 13 × 10 = 130. 13 × 3 = 39.\n130 + 39 = 169.\n✓ Check: √169 = 13. We can go back!"
+    },
+    {
+      "id": "diag_P5_20",
+      "grade": "P5",
+      "subtopic": "Reading Data Tables",
+      "topic": "Statistics & Probability",
+      "difficulty": "Regular",
+      "question": "A class scores: 70, 85, 60, 90, 75. What is the mean?",
+      "options": [
+        "75",
+        "76",
+        "80",
+        "85"
+      ],
+      "correctIndex": 1,
+      "explanation": "Mean = total ÷ how many.\n70 + 85 + 60 + 90 + 75 = 380. ÷ 5 = 76.\nThink of 76 as the 'fair share' score if everyone got the same mark.\n✓ Check: 76 × 5 = 380 = the total. Correct!"
+    },
+    {
+      "id": "diag_P5_21",
+      "grade": "P5",
+      "subtopic": "Open Problems",
+      "topic": "Algebra",
+      "difficulty": "Hard",
+      "question": "Olu thinks of a number, doubles it and adds 7. The result is 31. What is the number?",
+      "options": [
+        "10",
+        "11",
+        "12",
+        "13"
+      ],
+      "correctIndex": 2,
+      "explanation": "Let the number be n. Double it: 2n. Add 7: 2n + 7 = 31.\nUndo the +7: 2n = 24. Undo the ×2: n = 12.\n✓ Check: 2(12) + 7 = 24 + 7 = 31. Correct!"
+    },
+    {
+      "id": "diag_P5_22",
+      "grade": "P5",
+      "subtopic": "Positive and Negative Integers (Temperature)",
+      "topic": "Numbers & Powers",
+      "difficulty": "Hard",
+      "question": "Temperature at 6 am: −2°C. It rises 11°C by noon. Temperature at noon?",
+      "options": [
+        "−13°C",
+        "9°C",
+        "13°C",
+        "−9°C"
+      ],
+      "correctIndex": 1,
+      "explanation": "Start at −2°C. Temperature RISES 11°C — we go UP the thermometer.\n−2 + 11 = +9°C.\nFrom −2: go up 2 steps to reach 0°C, then 9 more above = +9°C.\n✓ Check: 9 − 11 = −2. Undoing the rise brings us back. Correct!"
+    },
+    {
+      "id": "diag_P5_23",
+      "grade": "P5",
+      "subtopic": "Angle Classification",
+      "topic": "Geometry & Angles",
+      "difficulty": "Hard",
+      "question": "Two angles of a triangle are 65° and 55°. The third angle is:",
+      "options": [
+        "50°",
+        "55°",
+        "60°",
+        "70°"
+      ],
+      "correctIndex": 2,
+      "explanation": "All angles in a triangle add to 180°.\n65° + 55° + C = 180°. So 120° + C = 180°. C = 60°.\n✓ Check: 65 + 55 + 60 = 180. Correct!"
+    },
+    {
+      "id": "diag_P5_24",
+      "grade": "P5",
+      "subtopic": "Clock Angles",
+      "topic": "Measurement & Time",
+      "difficulty": "Hard",
+      "question": "What is the angle between clock hands at 3 o'clock?",
+      "options": [
+        "60°",
+        "70°",
+        "80°",
+        "90°"
+      ],
+      "correctIndex": 3,
+      "explanation": "A clock face = 360° circle. 12 hour-gaps, each = 30°.\nAt 3 o'clock: minute hand at 12 (top), hour hand at 3.\nCount gaps: 3 gaps × 30° = 90°.\n✓ Check: 90° is a right angle — exactly what a clock shows at 3 o'clock!"
+    },
+    {
+      "id": "diag_P5_25",
+      "grade": "P5",
+      "subtopic": "Prime Numbers",
+      "topic": "Factors & Multiples",
+      "difficulty": "Hard",
+      "question": "What is the sum of all prime numbers between 20 and 30?",
+      "options": [
+        "52",
+        "54",
+        "56",
+        "58"
+      ],
+      "correctIndex": 0,
+      "explanation": "Find all primes between 20 and 30.\n21=3×7 ✗. 22=2×11 ✗. 23 is prime ✓. 24,25,26,27,28 all have factors ✗. 29 is prime ✓.\nSum = 23 + 29 = 52.\n✓ Check: 23 and 29 are the only primes in this range. 23 + 29 = 52."
+    },
+    {
+      "id": "diag_P5_26",
+      "grade": "P5",
+      "subtopic": "Pythagorean theorem",
+      "topic": "Geometry & Angles",
+      "difficulty": "Hard",
+      "question": "A ladder 17 m long rests against a wall. The foot is 8 m from the wall. How high up the wall?",
+      "options": [
+        "13 m",
+        "14 m",
+        "15 m",
+        "16 m"
+      ],
+      "correctIndex": 2,
+      "explanation": "Ladder = hypotenuse = 17 m. Floor distance = 8 m. Find wall height.\nwall² = 17² − 8² = 289 − 64 = 225. Wall = √225 = 15 m.\n✓ Check: 8² + 15² = 64 + 225 = 289 = 17². Pythagoras confirmed!"
+    },
+    {
+      "id": "diag_P5_27",
+      "grade": "P5",
+      "subtopic": "Probability",
+      "topic": "Statistics & Probability",
+      "difficulty": "Hard",
+      "question": "Dice rolled twice. P(sum = 7)?",
+      "options": [
+        "1/6",
+        "2/6",
+        "3/6",
+        "4/6"
+      ],
+      "correctIndex": 0,
+      "explanation": "Two dice → 6 × 6 = 36 possible pairs.\nPairs summing to 7: (1,6),(2,5),(3,4),(4,3),(5,2),(6,1) = 6 pairs.\nP = 6/36 = 1/6.\n✓ Check: there are exactly 6 ways to make 7 from two dice."
+    }
+  ],
+  "P6": [
+    {
+      "id": "diag_P6_01",
+      "grade": "P6",
+      "subtopic": "Counting in millions and billions",
+      "topic": "Whole Numbers",
+      "difficulty": "Regular",
+      "question": "What is 2.5 × 10⁶ as an ordinary number?",
+      "options": [
+        "25,000",
+        "250,000",
+        "2,500,000",
+        "25,000,000"
+      ],
+      "correctIndex": 2,
+      "explanation": "Standard form: multiply the decimal by the power of 10 by moving the decimal RIGHT.\n2.5 × 10⁶ → move decimal 6 places right: 2,500,000.\n✓ Check: 2,500,000 ÷ 10⁶ = 2.5. We're back!"
+    },
+    {
+      "id": "diag_P6_02",
+      "grade": "P6",
+      "subtopic": "HCF on 3 digit numbers",
+      "topic": "Factors & Multiples",
+      "difficulty": "Regular",
+      "question": "Find HCF of 84 and 112.",
+      "options": [
+        "14",
+        "21",
+        "28",
+        "42"
+      ],
+      "correctIndex": 2,
+      "explanation": "Break both into prime factors.\n84 = 2² × 3 × 7. 112 = 2⁴ × 7.\nHCF = lowest power of SHARED primes: 2² and 7. HCF = 4 × 7 = 28.\n✓ Check: 84 ÷ 28 = 3 ✓, 112 ÷ 28 = 4 ✓."
+    },
+    {
+      "id": "diag_P6_03",
+      "grade": "P6",
+      "subtopic": "LCM on 3 digit numbers",
+      "topic": "Factors & Multiples",
+      "difficulty": "Regular",
+      "question": "Find LCM of 15 and 20.",
+      "options": [
+        "30",
+        "40",
+        "60",
+        "80"
+      ],
+      "correctIndex": 2,
+      "explanation": "15 = 3 × 5. 20 = 2² × 5. Take highest power of each prime: 2², 3, 5.\nLCM = 4 × 3 × 5 = 60.\n✓ Check: 60 ÷ 15 = 4 ✓, 60 ÷ 20 = 3 ✓."
+    },
+    {
+      "id": "diag_P6_04",
+      "grade": "P6",
+      "subtopic": "Numbers in index form",
+      "topic": "Whole Numbers",
+      "difficulty": "Regular",
+      "question": "Simplify: 5² × 5³",
+      "options": [
+        "5⁵",
+        "5⁶",
+        "25⁵",
+        "10⁵"
+      ],
+      "correctIndex": 0,
+      "explanation": "Same base (5), so add the indices!\n5² × 5³ = 5^(2+3) = 5⁵.\nThink of it: (5×5) × (5×5×5) = five 5s = 5⁵.\n✓ Check: 5⁵ = 3,125. And 25 × 125 = 3,125. Correct!"
+    },
+    {
+      "id": "diag_P6_05",
+      "grade": "P6",
+      "subtopic": "Direct and indirect proportions",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Regular",
+      "question": "4 workers take 6 days. How long for 8 workers?",
+      "options": [
+        "2 days",
+        "3 days",
+        "4 days",
+        "12 days"
+      ],
+      "correctIndex": 1,
+      "explanation": "More workers = less time (INDIRECT proportion — like a seesaw).\n4 workers × 6 days = 24 'worker-days' of total work.\nWith 8 workers: 8 × ? = 24. So ? = 3 days.\n✓ Check: 8 × 3 = 24 worker-days = same total work!"
+    },
+    {
+      "id": "diag_P6_06",
+      "grade": "P6",
+      "subtopic": "Profit and loss percent",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Regular",
+      "question": "Buy at ₦5,000, sell at ₦6,250. % profit?",
+      "options": [
+        "20%",
+        "25%",
+        "30%",
+        "35%"
+      ],
+      "correctIndex": 1,
+      "explanation": "Profit = ₦6,250 − ₦5,000 = ₦1,250.\n% Profit = (profit ÷ COST price) × 100 = (1,250 ÷ 5,000) × 100 = 25%.\n✓ Check: 25% of ₦5,000 = ₦1,250. Add: ₦5,000 + ₦1,250 = ₦6,250. Correct!"
+    },
+    {
+      "id": "diag_P6_07",
+      "grade": "P6",
+      "subtopic": "Expressing numbers as percentages",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Regular",
+      "question": "Express ¾ as a percentage.",
+      "options": [
+        "60%",
+        "70%",
+        "75%",
+        "80%"
+      ],
+      "correctIndex": 2,
+      "explanation": "Divide top by bottom, then × 100.\n3 ÷ 4 = 0.75. × 100 = 75%.\nOr think: ¼ = 25%, so ¾ = 75%.\n✓ Check: 75% of 4 = 3. Back to the numerator!"
+    },
+    {
+      "id": "diag_P6_08",
+      "grade": "P6",
+      "subtopic": "Taxes, rates and rents",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Regular",
+      "question": "Find 12% tax on an income of ₦150,000.",
+      "options": [
+        "₦15,000",
+        "₦16,000",
+        "₦18,000",
+        "₦20,000"
+      ],
+      "correctIndex": 2,
+      "explanation": "Tax = 12% of ₦150,000.\n10% = ₦15,000. 2% = ₦3,000. Total = ₦18,000.\n✓ Check: ₦18,000 ÷ ₦150,000 × 100 = 12%. Correct!"
+    },
+    {
+      "id": "diag_P6_09",
+      "grade": "P6",
+      "subtopic": "Principal interest, rate, time, dividends",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Regular",
+      "question": "SI on ₦30,000 at 6% for 2 years?",
+      "options": [
+        "₦3,000",
+        "₦3,500",
+        "₦3,600",
+        "₦4,000"
+      ],
+      "correctIndex": 2,
+      "explanation": "SI = (P × R × T) ÷ 100 = (30,000 × 6 × 2) ÷ 100 = 360,000 ÷ 100 = ₦3,600.\nThink: each year you earn 6% of ₦30,000 = ₦1,800. Over 2 years = ₦3,600.\n✓ Check: ₦1,800 × 2 = ₦3,600. Correct!"
+    },
+    {
+      "id": "diag_P6_10",
+      "grade": "P6",
+      "subtopic": "Angles",
+      "topic": "Geometry & Angles",
+      "difficulty": "Regular",
+      "question": "Angles of a quadrilateral are 85°, 95°, 110°. Find the 4th.",
+      "options": [
+        "60°",
+        "70°",
+        "75°",
+        "80°"
+      ],
+      "correctIndex": 1,
+      "explanation": "Quadrilateral angles add up to 360° (like two triangles joined together).\n85 + 95 + 110 + D = 360. So 290 + D = 360. D = 70°.\n✓ Check: 85 + 95 + 110 + 70 = 360. Correct!"
+    },
+    {
+      "id": "diag_P6_11",
+      "grade": "P6",
+      "subtopic": "Volumes of prism",
+      "topic": "Measurement & Time",
+      "difficulty": "Regular",
+      "question": "Triangular prism: triangle base=10cm, height=6cm, length=8cm. Volume?",
+      "options": [
+        "240 cm³",
+        "360 cm³",
+        "480 cm³",
+        "720 cm³"
+      ],
+      "correctIndex": 0,
+      "explanation": "Volume of a prism = (area of base) × length.\nTriangular base = ½ × 10 × 6 = 30 cm².\nVolume = 30 × 8 = 240 cm³.\n✓ Check: 240 ÷ 8 = 30 cm² (base area). And ½×10×6 = 30. Correct!"
+    },
+    {
+      "id": "diag_P6_12",
+      "grade": "P6",
+      "subtopic": "Squares of numbers up to 600",
+      "topic": "Numbers & Powers",
+      "difficulty": "Regular",
+      "question": "What is √625?",
+      "options": [
+        "23",
+        "24",
+        "25",
+        "26"
+      ],
+      "correctIndex": 2,
+      "explanation": "Ask: what number times itself = 625?\nTry 25: 25 × 25 = 625. Yes!\n√625 = 25.\n✓ Check: 25² = 625. Correct!"
+    },
+    {
+      "id": "diag_P6_13",
+      "grade": "P6",
+      "subtopic": "Profit and loss percent",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Hard",
+      "question": "After a 20% loss, a laptop sells for ₦96,000. Original price?",
+      "options": [
+        "₦112,000",
+        "₦115,000",
+        "₦120,000",
+        "₦125,000"
+      ],
+      "correctIndex": 2,
+      "explanation": "After a 20% LOSS, the laptop sells for 80% of its original price.\nOriginal × 80% = ₦96,000. So original = ₦96,000 ÷ 0.8 = ₦120,000.\n✓ Check: 20% of ₦120,000 = ₦24,000. ₦120,000 − ₦24,000 = ₦96,000. Correct!"
+    },
+    {
+      "id": "diag_P6_14",
+      "grade": "P6",
+      "subtopic": "Direct and indirect proportions",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Hard",
+      "question": "A car uses 12 L of fuel per 100 km. How far on 42 L?",
+      "options": [
+        "300 km",
+        "325 km",
+        "350 km",
+        "375 km"
+      ],
+      "correctIndex": 2,
+      "explanation": "More fuel = more distance (DIRECT proportion).\n12 L → 100 km. So 1 L → 100/12 = 25/3 km.\n42 L → 42 × 25/3 = 1,050/3 = 350 km.\n✓ Check: 350 ÷ 42 × 12 = 100 km per 12 litres. Correct!"
+    },
+    {
+      "id": "diag_P6_15",
+      "grade": "P6",
+      "subtopic": "Numbers in index form",
+      "topic": "Whole Numbers",
+      "difficulty": "Hard",
+      "question": "Evaluate: 2⁴ ÷ 2²",
+      "options": [
+        "2",
+        "4",
+        "8",
+        "16"
+      ],
+      "correctIndex": 1,
+      "explanation": "Same base (2), so subtract the indices!\n2⁴ ÷ 2² = 2^(4−2) = 2² = 4.\nThink: (2×2×2×2) ÷ (2×2) — two 2s cancel, two remain = 4.\n✓ Check: 16 ÷ 4 = 4. Correct!"
+    },
+    {
+      "id": "diag_P6_16",
+      "grade": "P6",
+      "subtopic": "Taxes, rates and rents",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Hard",
+      "question": "Mr Adebayo earns ₦480,000/year. He pays 15% tax on earnings above ₦200,000. How much tax?",
+      "options": [
+        "₦36,000",
+        "₦42,000",
+        "₦48,000",
+        "₦72,000"
+      ],
+      "correctIndex": 1,
+      "explanation": "He only pays tax on earnings ABOVE ₦200,000.\nTaxable = ₦480,000 − ₦200,000 = ₦280,000.\nTax = 15% of ₦280,000 = 0.15 × 280,000 = ₦42,000.\n✓ Check: ₦42,000 ÷ ₦280,000 × 100 = 15%. Correct!"
+    },
+    {
+      "id": "diag_P6_17",
+      "grade": "P6",
+      "subtopic": "Principal interest, rate, time, dividends",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Hard",
+      "question": "₦80,000 grows to ₦96,000 in 4 years at simple interest. What is the rate?",
+      "options": [
+        "4%",
+        "5%",
+        "6%",
+        "8%"
+      ],
+      "correctIndex": 1,
+      "explanation": "Interest = ₦96,000 − ₦80,000 = ₦16,000.\nR = (SI × 100) ÷ (P × T) = (16,000 × 100) ÷ (80,000 × 4) = 1,600,000 ÷ 320,000 = 5%.\n✓ Check: SI at 5% for 4 years on ₦80,000 = (80,000×5×4)÷100 = ₦16,000. Correct!"
+    },
+    {
+      "id": "diag_P6_18",
+      "grade": "P6",
+      "subtopic": "Angles",
+      "topic": "Geometry & Angles",
+      "difficulty": "Hard",
+      "question": "A regular polygon has interior angles of 120°. How many sides?",
+      "options": [
+        "4",
+        "5",
+        "6",
+        "8"
+      ],
+      "correctIndex": 2,
+      "explanation": "Each interior angle of a regular polygon = (n−2) × 180 ÷ n.\nSet this to 120°: (n−2) × 180 = 120n.\n180n − 360 = 120n. So 60n = 360. n = 6.\nA shape with 6 sides = hexagon!\n✓ Check: (6−2)×180÷6 = 4×180÷6 = 720÷6 = 120°. Correct!"
+    },
+    {
+      "id": "diag_P6_19",
+      "grade": "P6",
+      "subtopic": "Volumes of prism",
+      "topic": "Measurement & Time",
+      "difficulty": "Hard",
+      "question": "A swimming pool: 20m×8m×1.5m. How many litres? (1m³=1,000L)",
+      "options": [
+        "200,000L",
+        "220,000L",
+        "240,000L",
+        "260,000L"
+      ],
+      "correctIndex": 2,
+      "explanation": "Volume = 20 × 8 × 1.5 = 240 m³.\n1 m³ = 1,000 litres. 240 × 1,000 = 240,000 litres.\n✓ Check: 240,000 ÷ 1,000 = 240 m³. Correct!"
+    },
+    {
+      "id": "diag_P6_20",
+      "grade": "P6",
+      "subtopic": "Expressing numbers as percentages",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Hard",
+      "question": "Price rises 20% then falls 10%. Net % change?",
+      "options": [
+        "8%",
+        "10%",
+        "12%",
+        "−8%"
+      ],
+      "correctIndex": 0,
+      "explanation": "Start with ₦100 to track the changes easily.\nAfter 20% increase: ₦100 × 1.2 = ₦120.\nAfter 10% decrease on ₦120: ₦120 × 0.9 = ₦108.\nNet = +₦8 on ₦100 = +8%.\n✓ Check: The decrease is on the bigger amount, so the net is still positive. +8%!"
+    },
+    {
+      "id": "diag_P6_21",
+      "grade": "P6",
+      "subtopic": "HCF on 3 digit numbers",
+      "topic": "Factors & Multiples",
+      "difficulty": "Extra Hard",
+      "question": "Three ropes: 90m, 126m, 180m. Greatest equal piece with no waste?",
+      "options": [
+        "9m",
+        "12m",
+        "18m",
+        "36m"
+      ],
+      "correctIndex": 2,
+      "explanation": "HCF of 126, 210, 168. 126=2×3²×7. 210=2×3×5×7. 168=2³×3×7.\nShared primes at LOWEST power: 2¹, 3¹, 7¹. HCF = 2×3×7 = 42.\n✓ Check: 126÷42=3 ✓, 210÷42=5 ✓, 168÷42=4 ✓."
+    },
+    {
+      "id": "diag_P6_22",
+      "grade": "P6",
+      "subtopic": "LCM on 3 digit numbers",
+      "topic": "Factors & Multiples",
+      "difficulty": "Extra Hard",
+      "question": "Bells ring every 18, 24, 36 seconds. Next simultaneous ring after 0s?",
+      "options": [
+        "54s",
+        "72s",
+        "108s",
+        "144s"
+      ],
+      "correctIndex": 1,
+      "explanation": "LCM of 18, 24, 36. 18=2×3². 24=2³×3. 36=2²×3².\nHighest powers: 2³ and 3². LCM = 8 × 9 = 72.\n✓ Check: 72÷18=4 ✓, 72÷24=3 ✓, 72÷36=2 ✓."
+    },
+    {
+      "id": "diag_P6_23",
+      "grade": "P6",
+      "subtopic": "Profit and loss percent",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Extra Hard",
+      "question": "Successive profits of 20% then 25% on a ₦40,000 item. Final price?",
+      "options": [
+        "₦58,000",
+        "₦60,000",
+        "₦62,000",
+        "₦64,000"
+      ],
+      "correctIndex": 1,
+      "explanation": "First profit of 20%: ₦40,000 × 1.2 = ₦48,000.\nSecond profit of 25% on the NEW price: ₦48,000 × 1.25 = ₦60,000.\nEach % is applied to the CURRENT price!\n✓ Check: ₦60,000 − ₦40,000 = ₦20,000 total profit = 50% of original. Makes sense!"
+    },
+    {
+      "id": "diag_P6_24",
+      "grade": "P6",
+      "subtopic": "Numbers in index form",
+      "topic": "Whole Numbers",
+      "difficulty": "Extra Hard",
+      "question": "What is the value of 3⁴ − 2⁵?",
+      "options": [
+        "49",
+        "51",
+        "53",
+        "55"
+      ],
+      "correctIndex": 0,
+      "explanation": "Work out each part separately.\n3⁴ = 3×3×3×3 = 81. 2⁵ = 2×2×2×2×2 = 32.\n81 − 32 = 49.\n✓ Check: 49 = 7². A perfect square!"
+    },
+    {
+      "id": "diag_P6_25",
+      "grade": "P6",
+      "subtopic": "Angles",
+      "topic": "Geometry & Angles",
+      "difficulty": "Extra Hard",
+      "question": "In triangle PQR: angle P = 2x, angle Q = 3x, angle R = 4x. Find angle R.",
+      "options": [
+        "40°",
+        "60°",
+        "80°",
+        "100°"
+      ],
+      "correctIndex": 2,
+      "explanation": "Angles in ratio 2:3:4. Total parts = 9. Total = 180°.\nEach part = 180 ÷ 9 = 20°. Angle R = 4 × 20° = 80°.\n✓ Check: 2×20 + 3×20 + 4×20 = 40+60+80 = 180°. Correct!"
+    },
+    {
+      "id": "diag_P6_26",
+      "grade": "P6",
+      "subtopic": "Direct and indirect proportions",
+      "topic": "Percentages & Ratios",
+      "difficulty": "Extra Hard",
+      "question": "12 pipes fill a tank in 9 hours. How long for 4 pipes?",
+      "options": [
+        "24 hours",
+        "27 hours",
+        "30 hours",
+        "36 hours"
+      ],
+      "correctIndex": 1,
+      "explanation": "More pipes = less time (INDIRECT proportion).\n12 × 9 = 108 pipe-hours of work. With 4 pipes: 4 × t = 108. t = 27 hours.\n✓ Check: 4 × 27 = 108. Same total work. Correct!"
+    },
+    {
+      "id": "diag_P6_27",
+      "grade": "P6",
+      "subtopic": "Reading Data Tables",
+      "topic": "Statistics & Probability",
+      "difficulty": "Extra Hard",
+      "question": "Mean of 6 numbers is 48. Five of them are 52, 41, 55, 44, 47. Find the 6th.",
+      "options": [
+        "44",
+        "46",
+        "49",
+        "53"
+      ],
+      "correctIndex": 2,
+      "explanation": "Total of 6 numbers = mean × count = 48 × 6 = 288.\nSum of the 5 known: 52+41+55+44+47 = 239.\n6th number = 288 − 239 = 49.\n✓ Check: 239 + 49 = 288. And 288 ÷ 6 = 48 = the mean. Correct!"
+    }
+  ]
+}

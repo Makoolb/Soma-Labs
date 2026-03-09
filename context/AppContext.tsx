@@ -35,17 +35,23 @@ export interface DiagnosticResult {
   englishTotal: number;
 }
 
+export type SkillMap = Record<string, number>;
+
 interface AppContextValue {
   profile: StudentProfile | null;
   isOnboarded: boolean;
   diagnosticDone: boolean;
   diagnosticResult: DiagnosticResult | null;
+  skillMap: SkillMap | null;
+  skillMapReady: boolean;
   sessions: SessionResult[];
   streakDays: number;
   totalXP: number;
   isLoading: boolean;
   saveProfile: (profile: StudentProfile) => Promise<void>;
   saveDiagnosticResult: (result: DiagnosticResult) => Promise<void>;
+  saveSkillMap: (map: SkillMap) => Promise<void>;
+  dismissSkillMapReady: () => void;
   addSession: (session: Omit<SessionResult, "id">) => Promise<void>;
   resetAll: () => Promise<void>;
 }
@@ -55,6 +61,7 @@ const AppContext = createContext<AppContextValue | null>(null);
 const KEYS = {
   PROFILE: "@somalabs/profile",
   DIAGNOSTIC: "@somalabs/diagnostic",
+  SKILL_MAP: "@somalabs/skillMap",
   SESSIONS: "@somalabs/sessions",
   STREAK: "@somalabs/streak",
   XP: "@somalabs/xp",
@@ -64,6 +71,8 @@ const KEYS = {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResult | null>(null);
+  const [skillMap, setSkillMap] = useState<SkillMap | null>(null);
+  const [skillMapReady, setSkillMapReady] = useState(false);
   const [sessions, setSessions] = useState<SessionResult[]>([]);
   const [streakDays, setStreakDays] = useState(0);
   const [totalXP, setTotalXP] = useState(0);
@@ -75,9 +84,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function load() {
     try {
-      const [pStr, dStr, sStr, xpStr, streakStr, lastStr] = await Promise.all([
+      const [pStr, dStr, smStr, sStr, xpStr, streakStr, lastStr] = await Promise.all([
         AsyncStorage.getItem(KEYS.PROFILE),
         AsyncStorage.getItem(KEYS.DIAGNOSTIC),
+        AsyncStorage.getItem(KEYS.SKILL_MAP),
         AsyncStorage.getItem(KEYS.SESSIONS),
         AsyncStorage.getItem(KEYS.XP),
         AsyncStorage.getItem(KEYS.STREAK),
@@ -85,13 +95,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ]);
       if (pStr) setProfile(JSON.parse(pStr));
       if (dStr) setDiagnosticResult(JSON.parse(dStr));
+      if (smStr) setSkillMap(JSON.parse(smStr));
       if (sStr) setSessions(JSON.parse(sStr));
       if (xpStr) setTotalXP(parseInt(xpStr, 10));
 
-      const today = new Date().toDateString();
       const yesterday = new Date(Date.now() - 86400000).toDateString();
       if (streakStr && lastStr) {
         const lastDate = new Date(lastStr).toDateString();
+        const today = new Date().toDateString();
         if (lastDate === today || lastDate === yesterday) {
           setStreakDays(parseInt(streakStr, 10));
         }
@@ -111,6 +122,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   async function saveDiagnosticResult(result: DiagnosticResult) {
     setDiagnosticResult(result);
     await AsyncStorage.setItem(KEYS.DIAGNOSTIC, JSON.stringify(result));
+  }
+
+  async function saveSkillMap(map: SkillMap) {
+    setSkillMap(map);
+    setSkillMapReady(true);
+    await AsyncStorage.setItem(KEYS.SKILL_MAP, JSON.stringify(map));
+  }
+
+  function dismissSkillMapReady() {
+    setSkillMapReady(false);
   }
 
   async function addSession(session: Omit<SessionResult, "id">) {
@@ -147,6 +168,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await Promise.all(Object.values(KEYS).map((k) => AsyncStorage.removeItem(k)));
     setProfile(null);
     setDiagnosticResult(null);
+    setSkillMap(null);
+    setSkillMapReady(false);
     setSessions([]);
     setStreakDays(0);
     setTotalXP(0);
@@ -158,16 +181,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       isOnboarded: !!profile,
       diagnosticDone: !!diagnosticResult,
       diagnosticResult,
+      skillMap,
+      skillMapReady,
       sessions,
       streakDays,
       totalXP,
       isLoading,
       saveProfile,
       saveDiagnosticResult,
+      saveSkillMap,
+      dismissSkillMapReady,
       addSession,
       resetAll,
     }),
-    [profile, diagnosticResult, sessions, streakDays, totalXP, isLoading]
+    [profile, diagnosticResult, skillMap, skillMapReady, sessions, streakDays, totalXP, isLoading]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
