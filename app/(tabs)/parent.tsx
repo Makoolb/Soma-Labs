@@ -12,26 +12,41 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useApp, type SessionResult } from "@/context/AppContext";
+import { useApp, type SessionResult, type SkillMap } from "@/context/AppContext";
 
 // Total questions available per grade in the practice bank
 const QUESTIONS_BY_GRADE: Record<string, number> = { P4: 81, P5: 74, P6: 51 };
 
 // ---- computation helpers ----
 
-function getTopicAccuracy(sessions: SessionResult[]) {
+/** Top topics by first-attempt accuracy (deduplicated by questionId, oldest session first). */
+function getFirstAttemptAccuracy(sessions: SessionResult[]) {
+  const sorted = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const seen = new Set<string>();
   const map: Record<string, { correct: number; total: number }> = {};
-  for (const s of sessions) {
+  for (const s of sorted) {
     for (const a of s.answers) {
+      const key = a.questionId || `${a.topic}__${a.subject}__noid__${s.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
       if (!map[a.topic]) map[a.topic] = { correct: 0, total: 0 };
       map[a.topic].total++;
       if (a.correct) map[a.topic].correct++;
     }
   }
   return Object.entries(map)
-    .filter(([, d]) => d.total >= 3)
+    .filter(([, d]) => d.total >= 2)
     .map(([topic, d]) => ({ topic, pct: Math.round((d.correct / d.total) * 100), total: d.total }))
     .sort((a, b) => b.pct - a.pct);
+}
+
+/** Weakest topics from the diagnostic SkillMap (lowest % first). */
+function getFocusAreas(skillMap: SkillMap | null, n = 3): { topic: string; pct: number }[] {
+  if (!skillMap) return [];
+  return Object.entries(skillMap)
+    .map(([topic, pct]) => ({ topic, pct }))
+    .sort((a, b) => a.pct - b.pct)
+    .slice(0, n);
 }
 
 function uniqueQuestionsAttempted(sessions: SessionResult[]): number {
@@ -91,14 +106,13 @@ const STATUS_META = {
 export default function ParentDashboard() {
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const { profile, sessions, streakDays, totalXP } = useApp();
+  const { profile, sessions, streakDays, totalXP, skillMap } = useApp();
   const [copied, setCopied] = useState(false);
 
   const level = Math.floor(totalXP / 500) + 1;
 
-  const topicAccuracy = useMemo(() => getTopicAccuracy(sessions), [sessions]);
-  const strengthAreas = topicAccuracy.slice(0, 3);
-  const focusAreas = [...topicAccuracy].reverse().slice(0, 3);
+  const strengthAreas = useMemo(() => getFirstAttemptAccuracy(sessions).slice(0, 3), [sessions]);
+  const focusAreas = useMemo(() => getFocusAreas(skillMap), [skillMap]);
 
   const thisWeek = useMemo(() => weekSessions(sessions), [sessions]);
   const weekProblems = thisWeek.reduce((s, r) => s + r.total, 0);
@@ -137,14 +151,14 @@ export default function ParentDashboard() {
     }
 
     if (focusAreas.length > 0) {
-      lines.push(``, `📌 *Focus Areas*`);
-      focusAreas.forEach((a) => lines.push(`• ${a.topic} — ${a.pct}%`));
+      lines.push(``, `📌 *Focus Areas (needs practice)*`);
+      focusAreas.forEach((a) => lines.push(`• ${a.topic} — ${a.pct}% skill score`));
     }
 
     if (status) {
       const meta = STATUS_META[status.label];
       lines.push(``, `📈 *Status: ${meta.label}*`);
-      lines.push(`Progress: ${status.actualPct}% done · Expected: ${status.expectedPct}%`);
+      lines.push(`Coverage: ${status.actualPct}% of ${profile?.grade} questions attempted`);
       if (examLabel) lines.push(`Exam: ${examLabel}`);
     }
 
@@ -241,42 +255,22 @@ export default function ParentDashboard() {
                   )}
                 </View>
 
-                {/* Progress comparison bars */}
-                <View style={styles.progressCompareWrap}>
-                  <View style={styles.progressRow}>
-                    <Text style={styles.progressLbl}>Actual</Text>
-                    <View style={styles.progressTrack}>
-                      <View
-                        style={[
-                          styles.progressFill,
-                          {
-                            width: `${status.actualPct}%` as any,
-                            backgroundColor: STATUS_META[status.label].color,
-                          },
-                        ]}
-                      />
-                    </View>
-                    <Text style={[styles.progressPct, { color: STATUS_META[status.label].color }]}>
-                      {status.actualPct}%
-                    </Text>
+                {/* Progress bar — actual coverage only */}
+                <View style={styles.progressRow}>
+                  <View style={styles.progressTrack}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          width: `${status.actualPct}%` as any,
+                          backgroundColor: STATUS_META[status.label].color,
+                        },
+                      ]}
+                    />
                   </View>
-                  <View style={styles.progressRow}>
-                    <Text style={styles.progressLbl}>Expected</Text>
-                    <View style={styles.progressTrack}>
-                      <View
-                        style={[
-                          styles.progressFill,
-                          {
-                            width: `${status.expectedPct}%` as any,
-                            backgroundColor: Colors.light.border,
-                          },
-                        ]}
-                      />
-                    </View>
-                    <Text style={[styles.progressPct, { color: Colors.light.textSecondary }]}>
-                      {status.expectedPct}%
-                    </Text>
-                  </View>
+                  <Text style={[styles.progressPct, { color: STATUS_META[status.label].color }]}>
+                    {status.actualPct}%
+                  </Text>
                 </View>
 
                 <Text style={styles.statusDetail}>
@@ -320,7 +314,7 @@ export default function ParentDashboard() {
                     </View>
                   </View>
                 ))}
-                <Text style={styles.areaHint}>First-attempt accuracy across all sessions</Text>
+                <Text style={styles.areaHint}>Topics answered correctly on the first try</Text>
               </View>
             </View>
           )}
@@ -352,15 +346,15 @@ export default function ParentDashboard() {
                     </View>
                   </View>
                 ))}
-                <Text style={styles.areaHint}>Topics that need the most practice time</Text>
+                <Text style={styles.areaHint}>Weakest areas from diagnostic, updated with practice</Text>
               </View>
             </View>
           )}
 
-          {topicAccuracy.length === 0 && (
+          {strengthAreas.length === 0 && (
             <View style={styles.noAccuracyCard}>
               <Text style={styles.noAccuracyTxt}>
-                Strength and focus areas will appear once {profile?.name} has answered at least 3 questions per topic.
+                Strength areas will appear once {profile?.name} has answered at least 2 questions per topic.
               </Text>
             </View>
           )}
@@ -432,12 +426,7 @@ const styles = StyleSheet.create({
   statusLabel: { fontFamily: "Inter_700Bold", fontSize: 18, flex: 1 },
   statusExam: { fontFamily: "Inter_400Regular", fontSize: 12, color: Colors.light.textSecondary },
 
-  progressCompareWrap: { gap: 10 },
   progressRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  progressLbl: {
-    fontFamily: "Inter_600SemiBold", fontSize: 12,
-    color: Colors.light.textSecondary, width: 58,
-  },
   progressTrack: {
     flex: 1, height: 12, backgroundColor: Colors.light.border, borderRadius: 6, overflow: "hidden",
   },
