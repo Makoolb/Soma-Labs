@@ -119,7 +119,7 @@ export default function ResultsScreen() {
             </View>
             <View style={[styles.breakdownCard, { backgroundColor: Colors.light.goldLight, borderColor: Colors.light.gold }]}>
               <Ionicons name="star" size={28} color={Colors.light.gold} />
-              <Text style={[styles.breakdownNum, { color: Colors.light.gold }]}>+{score * 10}</Text>
+              <Text style={[styles.breakdownNum, { color: Colors.light.gold }]}>+{score * 10 + 20}</Text>
               <Text style={styles.breakdownLbl}>XP earned</Text>
             </View>
           </View>

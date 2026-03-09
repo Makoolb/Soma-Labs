@@ -138,7 +138,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const id = Date.now().toString() + Math.random().toString(36).slice(2, 7);
     const full: SessionResult = { ...session, id };
 
-    const xpGained = full.score * 10;
+    // 10 XP per correct answer + 20 XP session completion bonus
+    const xpGained = full.score * 10 + 20;
     setTotalXP((prev) => {
       const next = prev + xpGained;
       AsyncStorage.setItem(KEYS.XP, String(next));

@@ -57,8 +57,8 @@ export default function HomeScreen() {
   const todaySessions = sessions.filter((s) => new Date(s.date).toDateString() === today);
   const todayScore = todaySessions.reduce((a, s) => a + s.score, 0);
   const todayTotal = todaySessions.reduce((a, s) => a + s.total, 0);
-  const level = Math.floor(totalXP / 100) + 1;
-  const xpInLevel = totalXP % 100;
+  const level = Math.floor(totalXP / 500) + 1;
+  const xpInLevel = totalXP % 500;
 
   const weakTopics = skillMap ? getWeakTopics(skillMap, 3) : [];
 
@@ -95,11 +95,12 @@ export default function HomeScreen() {
         <View style={styles.xpWrap}>
           <View style={styles.xpLabelRow}>
             <Text style={styles.xpLbl}>Level {level}</Text>
-            <Text style={styles.xpVal}>{totalXP} XP</Text>
+            <Text style={styles.xpVal}>{500 - xpInLevel} XP to next</Text>
           </View>
           <View style={styles.xpTrack}>
-            <View style={[styles.xpFill, { width: `${xpInLevel}%` }]} />
+            <View style={[styles.xpFill, { width: `${(xpInLevel / 500) * 100}%` }]} />
           </View>
+          <Text style={styles.xpTotalLbl}>{totalXP} XP total</Text>
         </View>
       </View>
 
@@ -313,6 +314,7 @@ const styles = StyleSheet.create({
   xpVal: { fontFamily: "Inter_400Regular", fontSize: 12, color: "rgba(255,255,255,0.65)" },
   xpTrack: { height: 8, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 4, overflow: "hidden" },
   xpFill: { height: "100%", backgroundColor: Colors.light.gold, borderRadius: 4 },
+  xpTotalLbl: { fontFamily: "Inter_400Regular", fontSize: 11, color: "rgba(255,255,255,0.5)", textAlign: "right" },
 
   // Skill Map Banner
   skillBanner: {

@@ -48,7 +48,7 @@ export default function ProgressScreen() {
   const totalCorrect = useMemo(() => sessions.reduce((a, s) => a + s.score, 0), [sessions]);
   const totalAnswered = useMemo(() => sessions.reduce((a, s) => a + s.total, 0), [sessions]);
   const accuracy = totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0;
-  const level = Math.floor(totalXP / 100) + 1;
+  const level = Math.floor(totalXP / 500) + 1;
 
   const skillMap = useMemo(() => {
     const map: Record<string, { correct: number; total: number; subject: string }> = {};
@@ -106,11 +106,11 @@ export default function ProgressScreen() {
           </View>
           <View style={[styles.xpBadge, { backgroundColor: Colors.light.gold }]}>
             <Ionicons name="star" size={14} color="#fff" />
-            <Text style={styles.xpBadgeTxt}>{100 - (totalXP % 100)} to next</Text>
+            <Text style={styles.xpBadgeTxt}>{500 - (totalXP % 500)} XP to next</Text>
           </View>
         </View>
         <View style={styles.xpTrack}>
-          <View style={[styles.xpFill, { width: `${totalXP % 100}%` }]} />
+          <View style={[styles.xpFill, { width: `${((totalXP % 500) / 500) * 100}%` }]} />
         </View>
       </View>
 
