@@ -8,6 +8,7 @@ export interface StudentProfile {
   name: string;
   grade: Grade;
   subject: Subject;
+  examDate?: string;
 }
 
 export interface AnswerRecord {
@@ -49,6 +50,7 @@ interface AppContextValue {
   totalXP: number;
   isLoading: boolean;
   saveProfile: (profile: StudentProfile) => Promise<void>;
+  updateExamDate: (date: string | null) => Promise<void>;
   saveDiagnosticResult: (result: DiagnosticResult) => Promise<void>;
   saveSkillMap: (map: SkillMap) => Promise<void>;
   dismissSkillMapReady: () => void;
@@ -117,6 +119,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   async function saveProfile(p: StudentProfile) {
     setProfile(p);
     await AsyncStorage.setItem(KEYS.PROFILE, JSON.stringify(p));
+  }
+
+  async function updateExamDate(date: string | null) {
+    if (!profile) return;
+    const updated: StudentProfile = date
+      ? { ...profile, examDate: date }
+      : { name: profile.name, grade: profile.grade, subject: profile.subject };
+    setProfile(updated);
+    await AsyncStorage.setItem(KEYS.PROFILE, JSON.stringify(updated));
   }
 
   async function saveDiagnosticResult(result: DiagnosticResult) {
@@ -189,6 +200,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       totalXP,
       isLoading,
       saveProfile,
+      updateExamDate,
       saveDiagnosticResult,
       saveSkillMap,
       dismissSkillMapReady,

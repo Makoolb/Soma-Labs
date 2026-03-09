@@ -23,7 +23,7 @@ An adaptive AI mobile tutor (Expo React Native app) for Nigerian Primary 4–6 s
 app/
   _layout.tsx          # Root layout — fonts, providers, Stack navigator
   index.tsx            # Redirect: onboarding → diagnostic → tabs
-  onboarding.tsx       # 3-step onboarding: intro → name → grade → subject
+  onboarding.tsx       # 5-step onboarding: intro → name → grade → subject → exam date
   diagnostic.tsx       # 20-question diagnostic from data/diagnosticQuestions.json — builds SkillMap
   results.tsx          # Session results modal — score, breakdown, XP, next steps
   (tabs)/
@@ -54,7 +54,7 @@ server/
 4. Tabs: Home / Practice / Progress
 
 ## Key Types (AppContext)
-- `StudentProfile`: `{ name, grade: 'P4'|'P5'|'P6', subject: 'English'|'Maths'|'Both' }`
+- `StudentProfile`: `{ name, grade: 'P4'|'P5'|'P6', subject: 'English'|'Maths'|'Both', examDate?: string }` — examDate is ISO string of first day of exam month
 - `SessionResult`: `{ id, date, subject, topic, score, total, answers: AnswerRecord[] }`
 - `DiagnosticResult`: `{ date, mathsScore, mathsTotal, englishScore, englishTotal }`
 - `AnswerRecord`: `{ questionId, correct, topic, subject }`

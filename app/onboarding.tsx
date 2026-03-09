@@ -28,7 +28,20 @@ const SUBJECTS: { label: string; value: Subject; desc: string; color: string; ic
   { label: "Both", value: "Both", desc: "Maths + English combined", color: Colors.light.sage, icon: "school" },
 ];
 
-const STEP_COLORS = [Colors.light.navy, Colors.light.optionB, Colors.light.optionC, Colors.light.rust];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const STEP_COLORS = [
+  Colors.light.navy,
+  Colors.light.optionB,
+  Colors.light.optionC,
+  Colors.light.rust,
+  Colors.light.sage,
+];
+
+function defaultExamYear() {
+  const now = new Date();
+  return now.getMonth() < 3 ? now.getFullYear() : now.getFullYear() + 1;
+}
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
@@ -37,6 +50,8 @@ export default function OnboardingScreen() {
   const [name, setName] = useState("");
   const [grade, setGrade] = useState<Grade | null>(null);
   const [subject, setSubject] = useState<Subject | null>(null);
+  const [examMonth, setExamMonth] = useState<number | null>(3);
+  const [examYear, setExamYear] = useState(defaultExamYear);
   const [saving, setSaving] = useState(false);
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -53,20 +68,45 @@ export default function OnboardingScreen() {
     Haptics.selectionAsync();
   }
 
-  async function finish() {
+  async function finish(withDate: boolean) {
     if (!grade || !subject) return;
     setSaving(true);
-    await saveProfile({ name: name.trim() || "Student", grade, subject });
+    const examDate =
+      withDate && examMonth !== null
+        ? new Date(examYear, examMonth, 1).toISOString()
+        : undefined;
+    await saveProfile({ name: name.trim() || "Student", grade, subject, examDate });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.replace("/diagnostic");
   }
+
+  const headerIcon =
+    step === 0 ? "school"
+    : step === 1 ? "person"
+    : step === 2 ? "library"
+    : step === 3 ? "book"
+    : "calendar";
+
+  const headerTitle =
+    step === 0 ? "SomaLabs"
+    : step === 1 ? "Your Name"
+    : step === 2 ? "Your Class"
+    : step === 3 ? "Your Subject"
+    : "Exam Date";
+
+  const headerSub =
+    step === 0 ? "Your Common Entrance tutor"
+    : step === 1 ? "What should we call you?"
+    : step === 2 ? "Which class are you in?"
+    : step === 3 ? "What do you want to practise?"
+    : "When is your Common Entrance exam?";
 
   return (
     <View style={[styles.root, { paddingTop: topPad }]}>
       {/* Colored header band */}
       <View style={[styles.headerBand, { backgroundColor: headerColor }]}>
         <View style={styles.progressDots}>
-          {[0, 1, 2, 3].map((i) => (
+          {[0, 1, 2, 3, 4].map((i) => (
             <View
               key={i}
               style={[
@@ -82,24 +122,10 @@ export default function OnboardingScreen() {
           </TouchableOpacity>
         )}
         <View style={styles.headerIconWrap}>
-          <Ionicons
-            name={step === 0 ? "school" : step === 1 ? "person" : step === 2 ? "library" : "book"}
-            size={52}
-            color="rgba(255,255,255,0.9)"
-          />
+          <Ionicons name={headerIcon as any} size={52} color="rgba(255,255,255,0.9)" />
         </View>
-        <Text style={styles.headerTitle}>
-          {step === 0 ? "SomaLabs" : step === 1 ? "Your Name" : step === 2 ? "Your Class" : "Your Subject"}
-        </Text>
-        <Text style={styles.headerSub}>
-          {step === 0
-            ? "Your Common Entrance tutor"
-            : step === 1
-            ? "What should we call you?"
-            : step === 2
-            ? "Which class are you in?"
-            : "What do you want to practise?"}
-        </Text>
+        <Text style={styles.headerTitle}>{headerTitle}</Text>
+        <Text style={styles.headerSub}>{headerSub}</Text>
       </View>
 
       {/* White sheet */}
@@ -112,13 +138,14 @@ export default function OnboardingScreen() {
           {step === 0 && (
             <>
               <Text style={styles.bodyText}>
-                SomaLabs gives Nigerian Primary 4–6 students daily Maths and English practice tailored to the Common Entrance Exam. Set up in just 3 steps!
+                SomaLabs gives Nigerian Primary 4–6 students daily Maths and English practice tailored to the Common Entrance Exam. Set up in just 4 steps!
               </Text>
               <View style={styles.featureList}>
                 {[
                   { icon: "checkmark-circle", color: Colors.light.sage, text: "Questions matched to your class level" },
                   { icon: "star", color: Colors.light.gold, text: "Earn XP and build streaks every day" },
                   { icon: "bar-chart", color: Colors.light.optionB, text: "Track your progress topic by topic" },
+                  { icon: "calendar", color: Colors.light.rust, text: "Countdown tailored to your exam date" },
                 ].map((f) => (
                   <View key={f.text} style={[styles.featureRow, { borderLeftColor: f.color }]}>
                     <Ionicons name={f.icon as any} size={20} color={f.color} />
@@ -215,12 +242,66 @@ export default function OnboardingScreen() {
                 })}
               </View>
               <TouchableOpacity
-                style={[styles.bigBtn, { backgroundColor: headerColor }, (!subject || saving) && styles.btnDisabled]}
-                onPress={finish}
-                disabled={!subject || saving}
+                style={[styles.bigBtn, { backgroundColor: headerColor }, !subject && styles.btnDisabled]}
+                onPress={() => subject && animateStep(4)}
+                disabled={!subject}
+              >
+                <Text style={styles.bigBtnTxt}>Continue</Text>
+                <Ionicons name="arrow-forward" size={18} color="#fff" />
+              </TouchableOpacity>
+            </>
+          )}
+
+          {step === 4 && (
+            <>
+              <Text style={styles.examHint}>
+                We'll use this to track your countdown and adjust your practice pace.
+              </Text>
+
+              {/* Year selector */}
+              <View style={styles.yearRow}>
+                <TouchableOpacity
+                  style={styles.yearArrow}
+                  onPress={() => { Haptics.selectionAsync(); setExamYear((y) => y - 1); }}
+                >
+                  <Ionicons name="chevron-back" size={20} color={Colors.light.navy} />
+                </TouchableOpacity>
+                <Text style={styles.yearTxt}>{examYear}</Text>
+                <TouchableOpacity
+                  style={styles.yearArrow}
+                  onPress={() => { Haptics.selectionAsync(); setExamYear((y) => y + 1); }}
+                >
+                  <Ionicons name="chevron-forward" size={20} color={Colors.light.navy} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Month grid */}
+              <View style={styles.monthGrid}>
+                {MONTHS.map((m, i) => {
+                  const sel = examMonth === i;
+                  return (
+                    <TouchableOpacity
+                      key={m}
+                      style={[styles.monthCell, sel && { backgroundColor: Colors.light.sage, borderColor: Colors.light.sage }]}
+                      onPress={() => { Haptics.selectionAsync(); setExamMonth(i); }}
+                    >
+                      <Text style={[styles.monthTxt, sel && { color: "#fff", fontFamily: "Inter_700Bold" }]}>{m}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <TouchableOpacity
+                style={[styles.bigBtn, { backgroundColor: Colors.light.sage }, saving && styles.btnDisabled]}
+                onPress={() => finish(true)}
+                disabled={saving}
               >
                 <Text style={styles.bigBtnTxt}>{saving ? "Setting up..." : "Start My Journey"}</Text>
                 {!saving && <Ionicons name="rocket-outline" size={18} color="#fff" />}
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.skipBtn} onPress={() => finish(false)} disabled={saving}>
+                <Text style={styles.skipTxt}>Skip for now</Text>
               </TouchableOpacity>
             </>
           )}
@@ -360,4 +441,49 @@ const styles = StyleSheet.create({
   subjectTxt: { flex: 1, gap: 2 },
   subjectLbl: { fontFamily: "Inter_700Bold", fontSize: 16, color: Colors.light.navy },
   subjectDesc: { fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary },
+  // Exam date step
+  examHint: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    color: Colors.light.textSecondary,
+    lineHeight: 22,
+    textAlign: "center",
+    paddingHorizontal: 8,
+  },
+  yearRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 24,
+    backgroundColor: Colors.light.card,
+    borderRadius: 16,
+    paddingVertical: 14,
+  },
+  yearArrow: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: Colors.light.background,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  yearTxt: { fontFamily: "Inter_700Bold", fontSize: 22, color: Colors.light.navy, minWidth: 70, textAlign: "center" },
+  monthGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  monthCell: {
+    width: "22%",
+    flexGrow: 1,
+    paddingVertical: 14,
+    backgroundColor: Colors.light.card,
+    borderRadius: 14,
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: Colors.light.border,
+  },
+  monthTxt: { fontFamily: "Inter_500Medium", fontSize: 14, color: Colors.light.text },
+  skipBtn: { alignItems: "center", paddingVertical: 8 },
+  skipTxt: { fontFamily: "Inter_400Regular", fontSize: 14, color: Colors.light.textSecondary },
 });
