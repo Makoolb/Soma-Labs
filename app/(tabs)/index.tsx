@@ -9,7 +9,9 @@ import {
   Animated,
   Modal,
   Pressable,
+  Image,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -159,34 +161,51 @@ export default function HomeScreen() {
       >
         {/* Hero */}
         <View style={styles.hero}>
-          <View style={styles.heroTop}>
-            <View style={styles.heroText}>
-              <Text style={styles.heroGreet}>Good day,</Text>
-              <Text style={styles.heroName}>{profile?.name}</Text>
-              <View style={styles.heroBadgeRow}>
-                <View style={styles.badge}>
-                  <Text style={styles.badgeTxt}>{profile?.grade}</Text>
-                </View>
-                <View style={styles.badge}>
-                  <Text style={styles.badgeTxt}>{profile?.subject}</Text>
-                </View>
+          <LinearGradient
+            colors={["#3460E8", "#1A2F5E"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          {/* Decorative bubbles */}
+          <View style={[styles.heroBubble, { top: -28, right: 90, width: 90, height: 90 }]} />
+          <View style={[styles.heroBubble, { bottom: -30, left: -20, width: 110, height: 110, backgroundColor: "rgba(255,255,255,0.04)" }]} />
+          <View style={[styles.heroBubble, { top: 10, left: "40%", width: 40, height: 40, backgroundColor: "rgba(255,255,255,0.06)" }]} />
+
+          {/* School kids illustration */}
+          <Image
+            source={require("@/assets/school-kids-portrait.png")}
+            style={styles.heroChars}
+            resizeMode="contain"
+          />
+
+          {/* Text content — confined to left ~63% */}
+          <View style={styles.heroContent}>
+            <Text style={styles.heroGreet}>Good day,</Text>
+            <Text style={styles.heroName}>{profile?.name}</Text>
+            <View style={styles.heroBadgeRow}>
+              <View style={styles.badge}>
+                <Text style={styles.badgeTxt}>{profile?.grade}</Text>
+              </View>
+              <View style={styles.badge}>
+                <Text style={styles.badgeTxt}>{profile?.subject}</Text>
+              </View>
+              <View style={[styles.badge, styles.streakBadge]}>
+                <Ionicons name="flame" size={12} color={Colors.light.gold} />
+                <Text style={styles.streakBadgeTxt}>{streakDays}</Text>
               </View>
             </View>
-            <View style={styles.streakCircle}>
-              <Ionicons name="flame" size={20} color={Colors.light.gold} />
-              <Text style={styles.streakNum}>{streakDays}</Text>
-              <Text style={styles.streakLbl}>streak</Text>
+
+            {/* XP bar */}
+            <View style={styles.xpWrap}>
+              <View style={styles.xpLabelRow}>
+                <Text style={styles.xpLbl}>Level {level}</Text>
+                <Text style={styles.xpVal}>{500 - xpInLevel} XP to next</Text>
+              </View>
+              <View style={styles.xpTrack}>
+                <View style={[styles.xpFill, { width: `${(xpInLevel / 500) * 100}%` }]} />
+              </View>
             </View>
-          </View>
-          <View style={styles.xpWrap}>
-            <View style={styles.xpLabelRow}>
-              <Text style={styles.xpLbl}>Level {level}</Text>
-              <Text style={styles.xpVal}>{500 - xpInLevel} XP to next</Text>
-            </View>
-            <View style={styles.xpTrack}>
-              <View style={[styles.xpFill, { width: `${(xpInLevel / 500) * 100}%` }]} />
-            </View>
-            <Text style={styles.xpTotalLbl}>{totalXP} XP total</Text>
           </View>
         </View>
 
@@ -295,7 +314,10 @@ export default function HomeScreen() {
         )}
 
         {/* Today's session */}
-        <Text style={styles.sectionTitle}>Today's Session</Text>
+        <View style={styles.sectionTitleRow}>
+          <View style={[styles.sectionAccent, { backgroundColor: Colors.light.rust }]} />
+          <Text style={styles.sectionTitle}>Today's Session</Text>
+        </View>
         {todaySessions.length > 0 ? (
           <View style={styles.todayCard}>
             <View style={styles.todayRow}>
@@ -346,7 +368,10 @@ export default function HomeScreen() {
         {skillMap && !skillMapReady && (
           <>
             <View style={styles.sectionRow}>
-              <Text style={styles.sectionTitle}>Skill Map</Text>
+              <View style={styles.sectionTitleRow}>
+                <View style={[styles.sectionAccent, { backgroundColor: Colors.light.sage }]} />
+                <Text style={styles.sectionTitle}>Skill Map</Text>
+              </View>
               <TouchableOpacity onPress={() => router.push("/(tabs)/progress")}>
                 <Text style={styles.seeAll}>Full report</Text>
               </TouchableOpacity>
@@ -370,23 +395,30 @@ export default function HomeScreen() {
         )}
 
         {/* Quick practice */}
-        <Text style={styles.sectionTitle}>Quick Practice</Text>
+        <View style={styles.sectionRow}>
+          <View style={styles.sectionTitleRow}>
+            <View style={[styles.sectionAccent, { backgroundColor: Colors.light.gold }]} />
+            <Text style={styles.sectionTitle}>Quick Practice</Text>
+          </View>
+        </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
           {QUICK_TOPICS.map((qt, i) => (
             <TouchableOpacity
               key={i}
-              style={[styles.quickCard, { borderTopColor: qt.color, borderTopWidth: 4 }]}
+              style={[styles.quickCard, { backgroundColor: qt.color + "1A", borderColor: qt.color + "40" }]}
               onPress={() => {
                 Haptics.selectionAsync();
                 router.push({ pathname: "/(tabs)/practice", params: { autoStart: "1", subject: qt.subject, topic: qt.topic } });
               }}
-              activeOpacity={0.85}
+              activeOpacity={0.82}
             >
               <View style={[styles.quickIcon, { backgroundColor: qt.color }]}>
                 <MaterialCommunityIcons name={qt.icon as any} size={22} color="#fff" />
               </View>
-              <Text style={styles.quickTopic} numberOfLines={2}>{qt.topic}</Text>
-              <Text style={[styles.quickSub, { color: qt.color }]}>Maths</Text>
+              <Text style={[styles.quickTopic, { color: Colors.light.navy }]} numberOfLines={2}>{qt.topic}</Text>
+              <View style={[styles.quickSubBadge, { backgroundColor: qt.color }]}>
+                <Text style={styles.quickSubTxt}>Maths</Text>
+              </View>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -395,7 +427,10 @@ export default function HomeScreen() {
         {recentSessions.length > 0 && (
           <>
             <View style={styles.sectionRow}>
-              <Text style={styles.sectionTitle}>Recent Activity</Text>
+              <View style={styles.sectionTitleRow}>
+                <View style={[styles.sectionAccent, { backgroundColor: Colors.light.optionB }]} />
+                <Text style={styles.sectionTitle}>Recent Activity</Text>
+              </View>
               <TouchableOpacity onPress={() => router.push("/(tabs)/progress")}>
                 <Text style={styles.seeAll}>See all</Text>
               </TouchableOpacity>
@@ -493,31 +528,31 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.light.background },
+  container: { flex: 1, backgroundColor: "#F0F7FF" },
   content: { paddingHorizontal: 16, gap: 14 },
-  hero: { backgroundColor: Colors.light.navy, borderRadius: 26, padding: 20, gap: 16 },
-  heroTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  heroText: { gap: 3 },
-  heroGreet: { fontFamily: "Inter_400Regular", fontSize: 13, color: "rgba(255,255,255,0.65)" },
-  heroName: { fontFamily: "Inter_700Bold", fontSize: 28, color: "#fff" },
-  heroBadgeRow: { flexDirection: "row", gap: 6, marginTop: 4 },
-  badge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: "rgba(255,255,255,0.22)" },
+
+  // Hero
+  hero: { borderRadius: 26, overflow: "hidden", height: 218 },
+  heroBubble: { position: "absolute", borderRadius: 9999, backgroundColor: "rgba(255,255,255,0.07)" },
+  heroChars: { position: "absolute", right: -4, bottom: 0, width: 122, height: 218 },
+  heroContent: { padding: 20, gap: 10, maxWidth: "65%", flex: 1, justifyContent: "center" },
+  heroGreet: { fontFamily: "Inter_400Regular", fontSize: 13, color: "rgba(255,255,255,0.72)" },
+  heroName: { fontFamily: "Inter_700Bold", fontSize: 28, color: "#fff", lineHeight: 34 },
+  heroBadgeRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
+  badge: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4, backgroundColor: "rgba(255,255,255,0.20)" },
   badgeTxt: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: "#fff" },
-  streakCircle: {
-    width: 72, height: 72, borderRadius: 36,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderWidth: 2, borderColor: Colors.light.gold,
-    justifyContent: "center", alignItems: "center", gap: 1,
-  },
-  streakNum: { fontFamily: "Inter_700Bold", fontSize: 22, color: "#fff", lineHeight: 24 },
-  streakLbl: { fontFamily: "Inter_400Regular", fontSize: 10, color: Colors.light.gold },
-  xpWrap: { gap: 6 },
+  streakBadge: { backgroundColor: Colors.light.gold + "35", flexDirection: "row", alignItems: "center", gap: 4 },
+  streakBadgeTxt: { fontFamily: "Inter_700Bold", fontSize: 12, color: Colors.light.gold },
+  xpWrap: { gap: 5, marginTop: 4 },
   xpLabelRow: { flexDirection: "row", justifyContent: "space-between" },
-  xpLbl: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: Colors.light.gold },
-  xpVal: { fontFamily: "Inter_400Regular", fontSize: 12, color: "rgba(255,255,255,0.65)" },
-  xpTrack: { height: 8, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 4, overflow: "hidden" },
+  xpLbl: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: Colors.light.gold },
+  xpVal: { fontFamily: "Inter_400Regular", fontSize: 11, color: "rgba(255,255,255,0.62)" },
+  xpTrack: { height: 7, backgroundColor: "rgba(255,255,255,0.22)", borderRadius: 4, overflow: "hidden" },
   xpFill: { height: "100%", backgroundColor: Colors.light.gold, borderRadius: 4 },
-  xpTotalLbl: { fontFamily: "Inter_400Regular", fontSize: 11, color: "rgba(255,255,255,0.5)", textAlign: "right" },
+
+  // Section titles
+  sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  sectionAccent: { width: 5, height: 20, borderRadius: 3 },
 
   // Exam Countdown Card
   countdownCard: {
@@ -600,10 +635,10 @@ const styles = StyleSheet.create({
   skillPct: { fontFamily: "Inter_700Bold", fontSize: 13, width: 38, textAlign: "right" },
   skillHint: { fontFamily: "Inter_400Regular", fontSize: 12, color: Colors.light.textSecondary, marginTop: 2 },
 
-  sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 17, color: Colors.light.navy, marginBottom: -6 },
+  sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 17, color: Colors.light.navy },
   sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: -6 },
   seeAll: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: Colors.light.optionB },
-  todayCard: { backgroundColor: Colors.light.card, borderRadius: 22, padding: 16, gap: 12, borderWidth: 2, borderColor: Colors.light.border },
+  todayCard: { backgroundColor: "#fff", borderRadius: 22, padding: 16, gap: 12, borderWidth: 2, borderColor: Colors.light.rust + "30" },
   todayRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   todayLeft: { gap: 2 },
   todayLabel: { fontFamily: "Inter_700Bold", fontSize: 15, color: Colors.light.navy },
@@ -612,19 +647,20 @@ const styles = StyleSheet.create({
   scorePct: { fontFamily: "Inter_700Bold", fontSize: 16 },
   continueBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    backgroundColor: Colors.light.optionB, borderRadius: 14, paddingVertical: 12,
+    backgroundColor: Colors.light.optionB, borderRadius: 14, paddingVertical: 13,
   },
   continueBtnText: { fontFamily: "Inter_700Bold", fontSize: 14, color: "#fff" },
-  startCard: { backgroundColor: Colors.light.card, borderRadius: 22, overflow: "hidden", borderWidth: 2, borderColor: Colors.light.border },
+  startCard: { backgroundColor: "#fff", borderRadius: 22, overflow: "hidden", borderWidth: 2, borderColor: Colors.light.gold + "50" },
   startCardInner: { flexDirection: "row", alignItems: "center", padding: 16, gap: 14 },
-  startIcon: { width: 56, height: 56, borderRadius: 16, justifyContent: "center", alignItems: "center" },
+  startIcon: { width: 58, height: 58, borderRadius: 18, justifyContent: "center", alignItems: "center" },
   startTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: Colors.light.navy },
   startSub: { fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary, marginTop: 2 },
   quickRow: { gap: 12, paddingBottom: 4 },
-  quickCard: { width: 148, backgroundColor: Colors.light.card, borderRadius: 18, padding: 14, gap: 8, overflow: "hidden" },
-  quickIcon: { width: 44, height: 44, borderRadius: 12, justifyContent: "center", alignItems: "center" },
-  quickTopic: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: Colors.light.text, lineHeight: 18 },
-  quickSub: { fontFamily: "Inter_700Bold", fontSize: 12 },
+  quickCard: { width: 150, borderRadius: 20, padding: 14, gap: 10, overflow: "hidden", borderWidth: 1.5 },
+  quickIcon: { width: 46, height: 46, borderRadius: 14, justifyContent: "center", alignItems: "center" },
+  quickTopic: { fontFamily: "Inter_600SemiBold", fontSize: 13, lineHeight: 18 },
+  quickSubBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-start" },
+  quickSubTxt: { fontFamily: "Inter_700Bold", fontSize: 11, color: "#fff" },
   recentCard: { backgroundColor: Colors.light.card, borderRadius: 20, overflow: "hidden" },
   recentRow: { flexDirection: "row", alignItems: "center", padding: 14, gap: 12 },
   recentIcon: { width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center" },
