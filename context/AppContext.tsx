@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type Grade = "P4" | "P5" | "P6";
@@ -65,21 +65,68 @@ const KEYS = {
   PROFILE: "@somalabs/profile",
   DIAGNOSTIC: "@somalabs/diagnostic",
   SKILL_MAP: "@somalabs/skillMap",
+  BASELINE_SKILL_MAP: "@somalabs/baselineSkillMap",
   SESSIONS: "@somalabs/sessions",
   STREAK: "@somalabs/streak",
   XP: "@somalabs/xp",
   LAST_PRACTICE: "@somalabs/lastPractice",
 };
 
+/**
+ * Blends diagnostic baseline scores with first-attempt practice accuracy.
+ * practiceWeight = min(0.7, firstAttemptCount / 14)  — caps at 70% influence
+ * Topics not in the baseline are added at their raw practice accuracy.
+ */
+function blendSkillMap(baseline: SkillMap, sessions: SessionResult[]): SkillMap {
+  const sorted = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const seen = new Set<string>();
+  const practiceMap: Record<string, { correct: number; total: number }> = {};
+
+  for (const s of sorted) {
+    for (const a of s.answers) {
+      const key = a.questionId || `${a.topic}__${a.subject}__noid__${s.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (!practiceMap[a.topic]) practiceMap[a.topic] = { correct: 0, total: 0 };
+      practiceMap[a.topic].total++;
+      if (a.correct) practiceMap[a.topic].correct++;
+    }
+  }
+
+  const blended: SkillMap = { ...baseline };
+
+  for (const [topic, data] of Object.entries(practiceMap)) {
+    const practiceScore = Math.round((data.correct / data.total) * 100);
+    if (data.total < 2) continue;
+
+    const weight = Math.min(0.7, data.total / 14);
+
+    if (baseline[topic] !== undefined) {
+      blended[topic] = Math.round(baseline[topic] * (1 - weight) + practiceScore * weight);
+    } else {
+      blended[topic] = practiceScore;
+    }
+  }
+
+  return blended;
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResult | null>(null);
   const [skillMap, setSkillMap] = useState<SkillMap | null>(null);
+  const [baselineSkillMap, setBaselineSkillMap] = useState<SkillMap | null>(null);
   const [skillMapReady, setSkillMapReady] = useState(false);
   const [sessions, setSessions] = useState<SessionResult[]>([]);
   const [streakDays, setStreakDays] = useState(0);
   const [totalXP, setTotalXP] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+
+  const baselineRef = useRef<SkillMap | null>(null);
+
+  useEffect(() => {
+    baselineRef.current = baselineSkillMap;
+  }, [baselineSkillMap]);
 
   useEffect(() => {
     load();
@@ -87,10 +134,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function load() {
     try {
-      const [pStr, dStr, smStr, sStr, xpStr, streakStr, lastStr] = await Promise.all([
+      const [pStr, dStr, smStr, bsmStr, sStr, xpStr, streakStr, lastStr] = await Promise.all([
         AsyncStorage.getItem(KEYS.PROFILE),
         AsyncStorage.getItem(KEYS.DIAGNOSTIC),
         AsyncStorage.getItem(KEYS.SKILL_MAP),
+        AsyncStorage.getItem(KEYS.BASELINE_SKILL_MAP),
         AsyncStorage.getItem(KEYS.SESSIONS),
         AsyncStorage.getItem(KEYS.XP),
         AsyncStorage.getItem(KEYS.STREAK),
@@ -99,6 +147,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (pStr) setProfile(JSON.parse(pStr));
       if (dStr) setDiagnosticResult(JSON.parse(dStr));
       if (smStr) setSkillMap(JSON.parse(smStr));
+      if (bsmStr) {
+        const bsm = JSON.parse(bsmStr);
+        setBaselineSkillMap(bsm);
+        baselineRef.current = bsm;
+      } else if (smStr) {
+        // Migrate: if no baseline stored yet but skillMap exists, treat it as the baseline
+        const sm = JSON.parse(smStr);
+        setBaselineSkillMap(sm);
+        baselineRef.current = sm;
+        AsyncStorage.setItem(KEYS.BASELINE_SKILL_MAP, smStr);
+      }
       if (sStr) setSessions(JSON.parse(sStr));
       if (xpStr) setTotalXP(parseInt(xpStr, 10));
 
@@ -137,10 +196,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem(KEYS.DIAGNOSTIC, JSON.stringify(result));
   }
 
+  /**
+   * Called once at diagnostic completion. Stores the map both as the live skillMap
+   * and as the immutable baseline.
+   */
   async function saveSkillMap(map: SkillMap) {
     setSkillMap(map);
+    setBaselineSkillMap(map);
+    baselineRef.current = map;
     setSkillMapReady(true);
-    await AsyncStorage.setItem(KEYS.SKILL_MAP, JSON.stringify(map));
+    await Promise.all([
+      AsyncStorage.setItem(KEYS.SKILL_MAP, JSON.stringify(map)),
+      AsyncStorage.setItem(KEYS.BASELINE_SKILL_MAP, JSON.stringify(map)),
+    ]);
   }
 
   function dismissSkillMapReady() {
@@ -151,7 +219,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const id = Date.now().toString() + Math.random().toString(36).slice(2, 7);
     const full: SessionResult = { ...session, id };
 
-    // 10 XP per correct answer + 20 XP session completion bonus
     const xpGained = full.score * 10 + 20;
     setTotalXP((prev) => {
       const next = prev + xpGained;
@@ -174,6 +241,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSessions((prev) => {
       const updated = [full, ...prev].slice(0, 100);
       AsyncStorage.setItem(KEYS.SESSIONS, JSON.stringify(updated));
+
+      // Blend the live skillMap with the new session data (no skillMapReady ping)
+      const baseline = baselineRef.current;
+      if (baseline) {
+        const blended = blendSkillMap(baseline, updated);
+        setSkillMap(blended);
+        AsyncStorage.setItem(KEYS.SKILL_MAP, JSON.stringify(blended));
+      }
+
       return updated;
     });
   }
@@ -183,6 +259,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setProfile(null);
     setDiagnosticResult(null);
     setSkillMap(null);
+    setBaselineSkillMap(null);
+    baselineRef.current = null;
     setSkillMapReady(false);
     setSessions([]);
     setStreakDays(0);

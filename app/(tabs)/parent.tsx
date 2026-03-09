@@ -346,7 +346,7 @@ export default function ParentDashboard() {
                     </View>
                   </View>
                 ))}
-                <Text style={styles.areaHint}>Weakest areas from diagnostic, updated with practice</Text>
+                <Text style={styles.areaHint}>Weakest areas from your Skill Map</Text>
               </View>
             </View>
           )}

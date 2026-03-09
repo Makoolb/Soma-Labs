@@ -14,17 +14,16 @@ import { useApp } from "@/context/AppContext";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 
-function SkillBar({ topic, correct, total }: { topic: string; correct: number; total: number }) {
-  const pct = total > 0 ? correct / total : 0;
-  const barColor = pct >= 0.7 ? Colors.light.sage : pct >= 0.4 ? Colors.light.gold : Colors.light.rust;
+function SkillBar({ topic, pct }: { topic: string; pct: number }) {
+  const barColor = pct >= 70 ? Colors.light.sage : pct >= 40 ? Colors.light.gold : Colors.light.rust;
   return (
     <View style={barSt.row}>
       <Text style={barSt.topic} numberOfLines={1}>{topic}</Text>
       <View style={barSt.track}>
-        <View style={[barSt.fill, { width: `${pct * 100}%`, backgroundColor: barColor }]} />
+        <View style={[barSt.fill, { width: `${pct}%`, backgroundColor: barColor }]} />
       </View>
       <View style={[barSt.pill, { backgroundColor: barColor }]}>
-        <Text style={barSt.pillTxt}>{Math.round(pct * 100)}%</Text>
+        <Text style={barSt.pillTxt}>{pct}%</Text>
       </View>
     </View>
   );
@@ -41,7 +40,7 @@ const barSt = StyleSheet.create({
 
 export default function ProgressScreen() {
   const insets = useSafeAreaInsets();
-  const { sessions, streakDays, totalXP, diagnosticResult, skillMap: diagSkillMap, profile } = useApp();
+  const { sessions, streakDays, totalXP, skillMap, profile } = useApp();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 + 84 : 100;
 
@@ -50,20 +49,10 @@ export default function ProgressScreen() {
   const accuracy = totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0;
   const level = Math.floor(totalXP / 500) + 1;
 
-  const skillMap = useMemo(() => {
-    const map: Record<string, { correct: number; total: number; subject: string }> = {};
-    sessions.forEach((s) => {
-      s.answers.forEach((a) => {
-        if (!map[a.topic]) map[a.topic] = { correct: 0, total: 0, subject: a.subject };
-        map[a.topic].total++;
-        if (a.correct) map[a.topic].correct++;
-      });
-    });
-    return map;
-  }, [sessions]);
-
-  const mathsSkills = Object.entries(skillMap).filter(([, v]) => v.subject === "maths");
-  const englishSkills = Object.entries(skillMap).filter(([, v]) => v.subject === "english");
+  const sortedSkillMap = useMemo(
+    () => skillMap ? Object.entries(skillMap).sort(([, a], [, b]) => a - b) : [],
+    [skillMap]
+  );
 
   const STAT_CARDS = [
     { label: "Streak", value: `${streakDays}d`, icon: "flame", color: Colors.light.gold, bg: Colors.light.goldLight },
@@ -114,78 +103,42 @@ export default function ProgressScreen() {
         </View>
       </View>
 
-      {/* Diagnostic Skill Map */}
-      {diagSkillMap && Object.keys(diagSkillMap).length > 0 && (
+      {/* Unified Skill Map */}
+      {sortedSkillMap.length > 0 ? (
         <>
           <View style={styles.sectionHeader}>
             <View style={[styles.sectionDot, { backgroundColor: Colors.light.navy }]} />
-            <Text style={styles.sectionTitle}>Diagnostic Skill Map</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionTitle}>Skill Map</Text>
+              <Text style={styles.sectionSub}>Started from your diagnostic, updated with practice</Text>
+            </View>
           </View>
           <View style={styles.card}>
-            {Object.entries(diagSkillMap)
-              .sort(([, a], [, b]) => a - b)
-              .map(([topic, pct], i) => {
-                const barColor = pct >= 70 ? Colors.light.sage : pct >= 40 ? Colors.light.gold : Colors.light.rust;
-                return (
-                  <View key={topic}>
-                    {i > 0 && <View style={styles.divider} />}
-                    <View style={styles.diagRow}>
-                      <Text style={styles.diagTopic} numberOfLines={1}>{topic}</Text>
-                      <View style={styles.diagBarWrap}>
-                        <View style={[styles.diagBarFill, { width: `${pct}%`, backgroundColor: barColor }]} />
-                      </View>
-                      <View style={[styles.diagPill, { backgroundColor: barColor }]}>
-                        <Text style={styles.diagPillTxt}>{pct}%</Text>
-                      </View>
-                    </View>
-                  </View>
-                );
-              })}
-            <Text style={styles.diagHint}>Sorted by weakest first — focus on red and orange topics.</Text>
-          </View>
-        </>
-      )}
-
-      {/* Maths skills */}
-      {mathsSkills.length > 0 && (
-        <>
-          <View style={styles.sectionHeader}>
-            <View style={[styles.sectionDot, { backgroundColor: Colors.light.optionB }]} />
-            <Text style={styles.sectionTitle}>Maths Skills</Text>
-          </View>
-          <View style={styles.card}>
-            {mathsSkills.map(([topic, data], i) => (
+            {sortedSkillMap.map(([topic, pct], i) => (
               <View key={topic}>
                 {i > 0 && <View style={styles.divider} />}
-                <SkillBar topic={topic} correct={data.correct} total={data.total} />
+                <SkillBar topic={topic} pct={pct} />
               </View>
             ))}
+            <Text style={styles.mapHint}>Sorted weakest-to-strongest — focus on red and orange topics first.</Text>
           </View>
         </>
-      )}
-
-      {/* English skills */}
-      {englishSkills.length > 0 && (
-        <>
-          <View style={styles.sectionHeader}>
-            <View style={[styles.sectionDot, { backgroundColor: Colors.light.rust }]} />
-            <Text style={styles.sectionTitle}>English Skills</Text>
-          </View>
-          <View style={styles.card}>
-            {englishSkills.map(([topic, data], i) => (
-              <View key={topic}>
-                {i > 0 && <View style={styles.divider} />}
-                <SkillBar topic={topic} correct={data.correct} total={data.total} />
-              </View>
-            ))}
-          </View>
-        </>
+      ) : (
+        <View style={styles.noMapCard}>
+          <Ionicons name="map-outline" size={28} color={Colors.light.textSecondary} />
+          <Text style={styles.noMapTxt}>
+            Complete the diagnostic test to see your Skill Map. It will update automatically as you practice.
+          </Text>
+        </View>
       )}
 
       {/* Session history */}
       {sessions.length > 0 && (
         <>
-          <Text style={styles.sectionTitle}>Session History</Text>
+          <View style={styles.sectionHeader}>
+            <View style={[styles.sectionDot, { backgroundColor: Colors.light.optionB }]} />
+            <Text style={styles.sectionTitle}>Session History</Text>
+          </View>
           <View style={styles.card}>
             {sessions.slice(0, 20).map((s, i) => {
               const pct = s.total > 0 ? Math.round((s.score / s.total) * 100) : 0;
@@ -216,7 +169,7 @@ export default function ProgressScreen() {
       )}
 
       {/* Empty state */}
-      {sessions.length === 0 && (
+      {sessions.length === 0 && !skillMap && (
         <View style={styles.emptyWrap}>
           <View style={[styles.emptyIcon, { backgroundColor: Colors.light.navyLight }]}>
             <Ionicons name="bar-chart-outline" size={44} color={Colors.light.navy} />
@@ -273,17 +226,18 @@ const styles = StyleSheet.create({
   xpTrack: { height: 10, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 5, overflow: "hidden" },
   xpFill: { height: "100%", backgroundColor: Colors.light.gold, borderRadius: 5 },
   sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: Colors.light.navy },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
-  sectionDot: { width: 10, height: 10, borderRadius: 5 },
+  sectionSub: { fontFamily: "Inter_400Regular", fontSize: 12, color: Colors.light.textSecondary, marginTop: 1 },
+  sectionHeader: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  sectionDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
   card: { backgroundColor: Colors.light.card, borderRadius: 20, padding: 16, gap: 12 },
   divider: { height: 1, backgroundColor: Colors.light.border },
-  diagRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  diagTopic: { fontFamily: "Inter_500Medium", fontSize: 12, color: Colors.light.text, width: 108 },
-  diagBarWrap: { flex: 1, height: 8, backgroundColor: Colors.light.border, borderRadius: 4, overflow: "hidden" },
-  diagBarFill: { height: "100%", borderRadius: 4 },
-  diagPill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, minWidth: 40, alignItems: "center" },
-  diagPillTxt: { fontFamily: "Inter_700Bold", fontSize: 12, color: "#fff" },
-  diagHint: { fontFamily: "Inter_400Regular", fontSize: 12, color: Colors.light.textSecondary, marginTop: 2 },
+  mapHint: { fontFamily: "Inter_400Regular", fontSize: 12, color: Colors.light.textSecondary, marginTop: 2 },
+  noMapCard: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: Colors.light.card, borderRadius: 16, padding: 16,
+    borderWidth: 2, borderColor: Colors.light.border, borderStyle: "dashed",
+  },
+  noMapTxt: { fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary, flex: 1, lineHeight: 20 },
   histRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   histIcon: { width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center" },
   histInfo: { flex: 1 },
