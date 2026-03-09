@@ -9,6 +9,7 @@ export interface StudentProfile {
   grade: Grade;
   subject: Subject;
   examDate?: string;
+  createdAt?: string;
 }
 
 export interface AnswerRecord {
@@ -117,8 +118,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function saveProfile(p: StudentProfile) {
-    setProfile(p);
-    await AsyncStorage.setItem(KEYS.PROFILE, JSON.stringify(p));
+    const withDate: StudentProfile = { ...p, createdAt: p.createdAt ?? new Date().toISOString() };
+    setProfile(withDate);
+    await AsyncStorage.setItem(KEYS.PROFILE, JSON.stringify(withDate));
   }
 
   async function updateExamDate(date: string | null) {
