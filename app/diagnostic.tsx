@@ -71,6 +71,7 @@ type Phase = "intro" | "quiz" | "summary";
 interface QuizResult {
   topic: string;
   correct: boolean;
+  skipped: boolean;
 }
 
 export default function DiagnosticScreen() {
@@ -97,12 +98,15 @@ export default function DiagnosticScreen() {
     const q = questions[current];
     const isCorrect = idx === q.correctIndex;
     setSelected(idx);
-    setResults((prev) => [...prev, { topic: q.topic, correct: isCorrect }]);
-    if (isCorrect) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    }
+    setResults((prev) => [...prev, { topic: q.topic, correct: isCorrect, skipped: false }]);
+  }
+
+  function handleSkip() {
+    Haptics.selectionAsync();
+    const q = questions[current];
+    setResults((prev) => [...prev, { topic: q.topic, correct: false, skipped: true }]);
+    setSelected(null);
+    handleNext();
   }
 
   async function handleNext() {
@@ -125,10 +129,13 @@ export default function DiagnosticScreen() {
   }
 
   async function saveSummaryAndNavigate() {
+    // Count only non-skipped answers
+    const answeredResults = results.filter((r) => !r.skipped);
+    
     // Build skillMap: topic → percentage (0–100)
     const topicCorrect: Record<string, number> = {};
     const topicTotal: Record<string, number> = {};
-    for (const r of results) {
+    for (const r of answeredResults) {
       topicTotal[r.topic] = (topicTotal[r.topic] ?? 0) + 1;
       if (r.correct) topicCorrect[r.topic] = (topicCorrect[r.topic] ?? 0) + 1;
     }
@@ -137,12 +144,12 @@ export default function DiagnosticScreen() {
       skillMap[topic] = Math.round(((topicCorrect[topic] ?? 0) / topicTotal[topic]) * 100);
     }
 
-    // Save diagnostic result
-    const totalCorrect = results.filter((r) => r.correct).length;
+    // Save diagnostic result (only count answered questions)
+    const totalCorrect = answeredResults.filter((r) => r.correct).length;
     await saveDiagnosticResult({
       date: new Date().toISOString(),
       mathsScore: totalCorrect,
-      mathsTotal: results.length,
+      mathsTotal: answeredResults.length,
       englishScore: 0,
       englishTotal: 0,
     });
@@ -170,8 +177,8 @@ export default function DiagnosticScreen() {
           {[
             { icon: "help-circle" as const, color: Colors.light.optionB, text: "20 questions across all major topics" },
             { icon: "map" as const, color: Colors.light.optionC, text: "Creates your personal Skill Map after the test" },
-            { icon: "time" as const, color: Colors.light.gold, text: "Takes about 15–20 minutes" },
-            { icon: "bulb" as const, color: Colors.light.sage, text: "Answer each question once — no retries" },
+            { icon: "time" as const, color: Colors.light.gold, text: "No time limit — take as long as you need" },
+            { icon: "bulb" as const, color: Colors.light.sage, text: "Answer or skip each question — results shown at the end" },
           ].map((item) => (
             <View key={item.text} style={[styles.infoCard, { borderLeftColor: item.color }]}>
               <Ionicons name={item.icon} size={22} color={item.color} />
@@ -189,8 +196,11 @@ export default function DiagnosticScreen() {
 
   // ─── SUMMARY ─────────────────────────────────────────────────────────
   if (phase === "summary") {
-    const totalCorrect = results.filter((r) => r.correct).length;
-    const percentage = Math.round((totalCorrect / results.length) * 100);
+    const answeredResults = results.filter((r) => !r.skipped);
+    const totalCorrect = answeredResults.filter((r) => r.correct).length;
+    const totalAnswered = answeredResults.length;
+    const totalSkipped = results.filter((r) => r.skipped).length;
+    const percentage = totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0;
     const performanceMessage =
       percentage >= 80 ? "Excellent foundation!" :
       percentage >= 60 ? "Good grasp of the topics" :
@@ -211,7 +221,7 @@ export default function DiagnosticScreen() {
           <View style={styles.scoreCard}>
             <View style={styles.scoreRow}>
               <Text style={styles.scoreLabel}>Your Score</Text>
-              <Text style={styles.scoreBig}>{totalCorrect}/{results.length}</Text>
+              <Text style={styles.scoreBig}>{totalCorrect}/{totalAnswered}</Text>
             </View>
             <View style={styles.scoreBar}>
               <View style={[styles.scoreBarFill, { width: `${percentage}%`, backgroundColor: percentage >= 70 ? Colors.light.sage : percentage >= 50 ? Colors.light.gold : Colors.light.rust }]} />
@@ -219,6 +229,9 @@ export default function DiagnosticScreen() {
             <View style={styles.percentRow}>
               <Text style={styles.percentTxt}>{percentage}% correct</Text>
             </View>
+            {totalSkipped > 0 && (
+              <Text style={styles.skippedTxt}>{totalSkipped} question{totalSkipped !== 1 ? "s" : ""} skipped</Text>
+            )}
           </View>
 
           <View style={styles.nextCard}>
@@ -241,7 +254,6 @@ export default function DiagnosticScreen() {
   if (!q) return null;
 
   const hasAnswered = selected !== null;
-  const isCorrect = hasAnswered && selected === q.correctIndex;
   const progress = (current + 1) / questions.length;
 
   return (
@@ -285,20 +297,15 @@ export default function DiagnosticScreen() {
             {q.options.map((opt, i) => {
               const optColor = Colors.light.optionB;
               const isSelected = selected === i;
-              const isCorrAns = i === q.correctIndex;
 
               let bg = Colors.light.card;
               let borderColor = Colors.light.border;
               let labelBg = optColor;
               let textColor = Colors.light.text;
 
-              if (!hasAnswered) {
-                if (isSelected) { bg = optColor + "18"; borderColor = optColor; }
-              } else {
-                // Show correct answer
-                if (isCorrAns) { bg = Colors.light.sageLight; borderColor = Colors.light.sage; labelBg = Colors.light.sage; textColor = "#1A5E35"; }
-                // Dim incorrect selection
-                else if (isSelected && !isCorrAns) { bg = Colors.light.rustLight; borderColor = Colors.light.rust; labelBg = Colors.light.rust; textColor = Colors.light.rust; }
+              if (isSelected) { 
+                bg = optColor + "18"; 
+                borderColor = optColor; 
               }
 
               return (
@@ -315,37 +322,29 @@ export default function DiagnosticScreen() {
                     <Text style={styles.optBadgeTxt}>{LETTER[i]}</Text>
                   </View>
                   <Text style={[styles.optText, { color: textColor }]}>{opt}</Text>
-                  {hasAnswered && isCorrAns && (
-                    <Ionicons name="checkmark-circle" size={22} color={Colors.light.sage} />
-                  )}
-                  {hasAnswered && isSelected && !isCorrAns && (
-                    <Ionicons name="close-circle" size={22} color={Colors.light.rust} />
+                  {isSelected && (
+                    <Ionicons name="checkmark-circle" size={22} color={Colors.light.optionB} />
                   )}
                 </TouchableOpacity>
               );
             })}
           </View>
 
-          {/* Feedback and next button */}
-          {hasAnswered && (
-            <View style={{ gap: 14 }}>
-              {isCorrect ? (
-                <View style={styles.correctBanner}>
-                  <Ionicons name="checkmark-circle" size={20} color={Colors.light.sage} />
-                  <Text style={styles.correctBannerText}>Correct!</Text>
-                </View>
-              ) : (
-                <View style={styles.wrongBanner}>
-                  <Ionicons name="close-circle" size={20} color={Colors.light.rust} />
-                  <Text style={styles.wrongBannerText}>Incorrect — the correct answer is highlighted.</Text>
-                </View>
-              )}
-
+          {/* Action buttons */}
+          {hasAnswered ? (
+            <View style={{ gap: 10 }}>
               <TouchableOpacity style={styles.primaryBtn} onPress={handleNext}>
                 <Text style={styles.primaryBtnText}>
                   {current + 1 >= questions.length ? "See My Results" : "Next Question"}
                 </Text>
                 <Ionicons name={current + 1 >= questions.length ? "bar-chart" : "arrow-forward"} size={18} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ gap: 10 }}>
+              <TouchableOpacity style={styles.skipBtn} onPress={handleSkip}>
+                <Ionicons name="arrow-forward" size={16} color={Colors.light.textSecondary} />
+                <Text style={styles.skipBtnText}>Skip this question</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -381,6 +380,11 @@ const styles = StyleSheet.create({
     shadowColor: Colors.light.gold, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6,
   },
   primaryBtnText: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#fff" },
+  skipBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: Colors.light.card, borderRadius: 18, paddingVertical: 16, borderWidth: 2, borderColor: Colors.light.border,
+  },
+  skipBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: Colors.light.textSecondary },
 
   // Summary
   summaryRoot: { flex: 1, backgroundColor: Colors.light.background },
@@ -397,6 +401,7 @@ const styles = StyleSheet.create({
   scoreBarFill: { height: "100%", borderRadius: 6 },
   percentRow: { alignItems: "center" },
   percentTxt: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: Colors.light.navy },
+  skippedTxt: { fontFamily: "Inter_400Regular", fontSize: 12, color: Colors.light.textSecondary, marginTop: 4 },
   nextCard: { backgroundColor: Colors.light.optionB + "0F", borderRadius: 16, padding: 18, borderWidth: 2, borderColor: Colors.light.optionB + "30", alignItems: "center", gap: 10 },
   nextCardTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: Colors.light.navy },
   nextCardSub: { fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary, textAlign: "center", lineHeight: 20 },
@@ -424,16 +429,4 @@ const styles = StyleSheet.create({
   optBadge: { width: 34, height: 34, borderRadius: 10, justifyContent: "center", alignItems: "center" },
   optBadgeTxt: { fontFamily: "Inter_700Bold", fontSize: 15, color: "#fff" },
   optText: { flex: 1, fontFamily: "Inter_500Medium", fontSize: 15, lineHeight: 22 },
-  wrongBanner: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    backgroundColor: Colors.light.rustLight, borderRadius: 14, padding: 14,
-    borderLeftWidth: 4, borderLeftColor: Colors.light.rust,
-  },
-  wrongBannerText: { flex: 1, fontFamily: "Inter_600SemiBold", fontSize: 14, color: Colors.light.rust },
-  correctBanner: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    backgroundColor: Colors.light.sageLight, borderRadius: 14, padding: 14,
-    borderLeftWidth: 4, borderLeftColor: Colors.light.sage,
-  },
-  correctBannerText: { flex: 1, fontFamily: "Inter_600SemiBold", fontSize: 14, color: Colors.light.sage },
 });
