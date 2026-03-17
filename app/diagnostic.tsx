@@ -277,7 +277,7 @@ export default function DiagnosticScreen() {
           {/* Options */}
           <View style={styles.options}>
             {q.options.map((opt, i) => {
-              const optColor = OPTION_COLORS[i];
+              const optColor = Colors.light.optionB;
               const isSelected = selected === i;
               const isCorrAns = i === q.correctIndex;
 
