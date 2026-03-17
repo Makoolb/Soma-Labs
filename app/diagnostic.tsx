@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors, { OPTION_COLORS } from "@/constants/colors";
 import { useApp, type SkillMap } from "@/context/AppContext";
+import { useTimer } from "@/lib/useTimer";
 import diagData from "@/data/diagnosticQuestions.json";
 
 interface DiagQuestion {
@@ -84,6 +85,7 @@ export default function DiagnosticScreen() {
   const [selected, setSelected] = useState<number | null>(null);
   const [results, setResults] = useState<QuizResult[]>([]);
   const slideAnim = useRef(new Animated.Value(0)).current;
+  const { formattedTime, isLowTime } = useTimer(600); // 10 minutes
 
   useEffect(() => {
     if (profile) setQuestions(pickQuestions(profile.grade));
@@ -260,6 +262,10 @@ export default function DiagnosticScreen() {
           }]}>
             <Text style={styles.diffPillTxt}>{q.difficulty}</Text>
           </View>
+          <View style={[styles.timerBadge, { backgroundColor: isLowTime ? Colors.light.rust + "20" : "rgba(255,255,255,0.2)" }]}>
+            <Ionicons name="timer" size={14} color={isLowTime ? Colors.light.rust : "#fff"} />
+            <Text style={[styles.timerTxt, { color: isLowTime ? Colors.light.rust : "#fff" }]}>{formattedTime}</Text>
+          </View>
         </View>
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
@@ -405,6 +411,8 @@ const styles = StyleSheet.create({
   topicPillTxt: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: "#fff" },
   diffPill: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 },
   diffPillTxt: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: "#fff" },
+  timerBadge: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5 },
+  timerTxt: { fontFamily: "Inter_700Bold", fontSize: 12 },
   progressTrack: { height: 8, backgroundColor: "rgba(255,255,255,0.25)", borderRadius: 4, overflow: "hidden" },
   progressFill: { height: "100%", backgroundColor: Colors.light.gold, borderRadius: 4 },
   quizScroll: { padding: 16 },

@@ -14,6 +14,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors, { OPTION_COLORS } from "@/constants/colors";
 import { useApp, type AnswerRecord, type SkillMap } from "@/context/AppContext";
+import { useTimer } from "@/lib/useTimer";
 import questionsData from "@/data/questions.json";
 
 const LETTER = ["A", "B", "C", "D"];
@@ -212,6 +213,7 @@ export default function PracticeScreen() {
   const [weakTopicsUsed, setWeakTopicsUsed] = useState<string[]>([]);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const explainFade = useRef(new Animated.Value(0)).current;
+  const { formattedTime, isLowTime } = useTimer(questions.length > 0 ? Math.max(300, questions.length * 30) : 300); // 5-10 min
 
   useEffect(() => {
     if (params.autoStart === "1" && params.subject && params.topic) {
@@ -503,7 +505,11 @@ export default function PracticeScreen() {
             }]}>
               <Text style={styles.diffPillTxt}>{q.difficulty}</Text>
             </View>
-          ) : <View style={{ width: 60 }} />}
+          ) : null}
+          <View style={[styles.timerBadge, { backgroundColor: isLowTime ? Colors.light.rust + "20" : "rgba(255,255,255,0.2)" }]}>
+            <Ionicons name="timer" size={14} color={isLowTime ? Colors.light.rust : "#fff"} />
+            <Text style={[styles.timerTxt, { color: isLowTime ? Colors.light.rust : "#fff" }]}>{formattedTime}</Text>
+          </View>
         </View>
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
@@ -720,6 +726,8 @@ const styles = StyleSheet.create({
   qBadgeTxt: { fontFamily: "Inter_700Bold", fontSize: 13, color: "#fff" },
   diffPill: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 },
   diffPillTxt: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: "#fff" },
+  timerBadge: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5 },
+  timerTxt: { fontFamily: "Inter_700Bold", fontSize: 11 },
   progressTrack: { height: 8, backgroundColor: "rgba(255,255,255,0.3)", borderRadius: 4, overflow: "hidden" },
   progressFill: { height: "100%", backgroundColor: "#fff", borderRadius: 4 },
 
