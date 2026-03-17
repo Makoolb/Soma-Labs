@@ -97,7 +97,7 @@ function blendSkillMap(baseline: SkillMap, sessions: SessionResult[]): SkillMap 
 
   for (const [topic, data] of Object.entries(practiceMap)) {
     const practiceScore = Math.round((data.correct / data.total) * 100);
-    if (data.total < 2) continue;
+    if (data.total < 1) continue;
 
     const weight = Math.min(0.7, data.total / 14);
 
