@@ -30,17 +30,45 @@ const DIFFICULTY_ORDER = ["Easy", "Regular", "Hard", "Extra Hard"] as const;
 type Difficulty = (typeof DIFFICULTY_ORDER)[number];
 
 // ─── DIAGNOSTIC TOPIC → PRACTICE QUESTION TOPIC MAPPING ──────────────────────
-// Diagnostic uses broad curriculum labels; practice bank uses specific topic names.
-const DIAG_TO_PRACTICE_TOPICS: Record<string, string[]> = {
-  "Whole Numbers":        ["Whole Numbers", "Addition and subtraction", "Multiplication", "Division", "Multiplication and Division"],
-  "Factors & Multiples":  ["Whole Numbers", "Algebra"],
-  "Fractions & Decimals": ["Fractions"],
-  "Percentages & Ratios": ["Money", "Fractions", "Word Problems"],
-  "Algebra":              ["Algebra", "Word Problems"],
-  "Numbers & Powers":     ["Whole Numbers", "Algebra"],
-  "Measurement & Time":   ["Time", "Measurements", "Capacity"],
-  "Geometry & Angles":    ["Area", "Perimeter", "Geometry", "Triangles", "Angles", "3-D Shapes", "Plane shapes"],
-  "Statistics & Probability": ["Statistics", "Probability", "Bar Graph"],
+// Each diagnostic topic maps to its primary practice topics (most relevant first)
+// and secondary topics (broader fallback pool).
+const DIAG_TO_PRACTICE_TOPICS: Record<string, { primary: string[]; secondary: string[] }> = {
+  "Whole Numbers": {
+    primary: ["Whole Numbers", "Addition and subtraction", "Multiplication and Division"],
+    secondary: ["Multiplication", "Division", "Word Problems"],
+  },
+  "Factors & Multiples": {
+    primary: ["Whole Numbers", "Word Problems"],
+    secondary: ["Algebra", "Multiplication and Division"],
+  },
+  "Fractions & Decimals": {
+    primary: ["Fractions"],
+    secondary: ["Word Problems", "Money"],
+  },
+  "Percentages & Ratios": {
+    primary: ["Money", "Fractions", "Word Problems"],
+    secondary: ["Algebra"],
+  },
+  "Algebra": {
+    primary: ["Algebra", "Word Problems"],
+    secondary: ["Whole Numbers"],
+  },
+  "Numbers & Powers": {
+    primary: ["Whole Numbers", "Algebra"],
+    secondary: ["Multiplication and Division"],
+  },
+  "Measurement & Time": {
+    primary: ["Time", "Measurements", "Capacity"],
+    secondary: ["Word Problems"],
+  },
+  "Geometry & Angles": {
+    primary: ["Geometry", "Angles", "Triangles", "Area", "Perimeter"],
+    secondary: ["3-D Shapes", "Plane shapes"],
+  },
+  "Statistics & Probability": {
+    primary: ["Statistics", "Probability", "Bar Graph"],
+    secondary: ["Word Problems"],
+  },
 };
 
 interface Question {
@@ -102,53 +130,120 @@ function shuffle<T>(arr: T[]): T[] {
   return [...arr].sort(() => Math.random() - 0.5);
 }
 
+// ─── WEIGHTED ADAPTIVE QUESTION PICKER ───────────────────────────────────────
+// Strategy:
+// 1. Take up to 5 weakest diagnostic topics, weighted by how low the score is
+// 2. For each weak topic, pull from primary practice topics first
+// 3. Weight selection so lower-scoring topics get more questions
+// 4. Difficulty distribution: 3 Easy + 3 Regular + 2 Hard + 2 Extra Hard
+// 5. Fallback chain: grade+topic → grade-only → full pool
 function pickSmartQuestions(grade: string, skillMap: SkillMap): { questions: Question[]; weakTopics: string[] } {
-  // 1. Find the 3 weakest diagnostic topics
-  const weakDiagTopics = Object.entries(skillMap)
+
+  // 1. Sort all diagnostic topics by score, take up to 5 weakest
+  const ranked = Object.entries(skillMap)
     .sort(([, a], [, b]) => a - b)
-    .slice(0, 3)
-    .map(([t]) => t);
+    .slice(0, 5);
 
-  // 2. Expand to practice topic names using the mapping
-  const practiceTopics = new Set<string>();
-  for (const dt of weakDiagTopics) {
-    const mapped = DIAG_TO_PRACTICE_TOPICS[dt] ?? [];
-    mapped.forEach((t) => practiceTopics.add(t));
+  const weakTopics = ranked.map(([t]) => t);
+
+  // 2. Build a weighted pool: questions from weaker topics appear more
+  //    Each topic gets a slot count proportional to how weak it is
+  //    Score 0% → 5 slots, Score 20% → 4 slots, Score 40% → 3 slots, etc.
+  const slotMap: Record<string, number> = {};
+  for (const [topic, score] of ranked) {
+    slotMap[topic] = Math.max(1, Math.ceil((100 - score) / 20));
   }
 
-  // 3. Pool: grade + mapped practice topics (maths only)
-  let pool = ALL_QUESTIONS.filter(
-    (q) => q.subject === "maths" && q.grade === grade && practiceTopics.has(q.topic)
-  );
+  // 3. Build the question pool with weighting
+  const weightedPool: Question[] = [];
+  const usedIds = new Set<string>();
 
-  // Fallback: if pool too small, include any maths questions for this grade
-  if (pool.length < SESSION_SIZE) {
-    const gradePool = ALL_QUESTIONS.filter((q) => q.subject === "maths" && q.grade === grade);
-    pool = pool.length > 0 ? [...new Map([...pool, ...gradePool].map((q) => [q.id, q])).values()] : gradePool;
+  for (const [diagTopic, slots] of Object.entries(slotMap)) {
+    const mapping = DIAG_TO_PRACTICE_TOPICS[diagTopic];
+    if (!mapping) continue;
+
+    // Try primary topics first, then secondary
+    const topicOrder = [...mapping.primary, ...mapping.secondary];
+
+    for (const practiceTopic of topicOrder) {
+      // Grade-specific questions for this topic
+      const gradeTopicPool = ALL_QUESTIONS.filter(
+        (q) =>
+          q.subject === "maths" &&
+          q.grade === grade &&
+          q.topic === practiceTopic &&
+          !usedIds.has(q.id)
+      );
+
+      // Add questions proportional to weakness (slots), avoid duplicates
+      const shuffled = shuffle(gradeTopicPool);
+      let added = 0;
+      for (const q of shuffled) {
+        if (added >= slots) break;
+        if (!usedIds.has(q.id)) {
+          weightedPool.push(q);
+          usedIds.add(q.id);
+          added++;
+        }
+      }
+
+      // If we got at least 1 from primary, move to next diag topic
+      if (added > 0 && mapping.primary.includes(practiceTopic)) break;
+    }
   }
 
-  // 4. Split by difficulty and pick with target distribution: 4 Regular, 3 Hard, 3 Extra Hard
-  const regular   = shuffle(pool.filter((q) => q.difficulty === "Regular"));
-  const hard      = shuffle(pool.filter((q) => q.difficulty === "Hard"));
-  const extraHard = shuffle(pool.filter((q) => q.difficulty === "Extra Hard"));
+  // 4. If pool is still small, backfill with any grade-level maths questions
+  if (weightedPool.length < SESSION_SIZE) {
+    const gradePool = ALL_QUESTIONS.filter(
+      (q) => q.subject === "maths" && q.grade === grade && !usedIds.has(q.id)
+    );
+    for (const q of shuffle(gradePool)) {
+      if (weightedPool.length >= SESSION_SIZE * 2) break;
+      weightedPool.push(q);
+      usedIds.add(q.id);
+    }
+  }
+
+  // 5. Final fallback: any maths question if grade pool is also thin
+  if (weightedPool.length < SESSION_SIZE) {
+    const anyPool = ALL_QUESTIONS.filter(
+      (q) => q.subject === "maths" && !usedIds.has(q.id)
+    );
+    for (const q of shuffle(anyPool)) {
+      if (weightedPool.length >= SESSION_SIZE * 2) break;
+      weightedPool.push(q);
+    }
+  }
+
+  // 6. Split by difficulty — distribution accounts for Easy tier
+  // Starting weights: 3 Easy + 3 Regular + 2 Hard + 2 Extra Hard
+  // The adaptive ladder will adjust from these starting points mid-session
+  const easy      = shuffle(weightedPool.filter((q) => q.difficulty === "Easy"));
+  const regular   = shuffle(weightedPool.filter((q) => q.difficulty === "Regular"));
+  const hard      = shuffle(weightedPool.filter((q) => q.difficulty === "Hard"));
+  const extraHard = shuffle(weightedPool.filter((q) => q.difficulty === "Extra Hard"));
 
   const picked: Question[] = [
-    ...regular.slice(0, 4),
-    ...hard.slice(0, 3),
-    ...extraHard.slice(0, 3),
+    ...easy.slice(0, 3),
+    ...regular.slice(0, 3),
+    ...hard.slice(0, 2),
+    ...extraHard.slice(0, 2),
   ];
 
-  // 5. Top up from remaining if we have fewer than 10
+  // Top up if we're short (rare — means the bank is very small for this grade)
   if (picked.length < SESSION_SIZE) {
-    const usedIds = new Set(picked.map((q) => q.id));
-    const remaining = shuffle(pool.filter((q) => !usedIds.has(q.id)));
+    const pickedIds = new Set(picked.map((q) => q.id));
+    const remaining = shuffle(weightedPool.filter((q) => !pickedIds.has(q.id)));
     for (const q of remaining) {
       if (picked.length >= SESSION_SIZE) break;
       picked.push(q);
     }
   }
 
-  return { questions: shuffle(picked).slice(0, SESSION_SIZE), weakTopics: weakDiagTopics };
+  return {
+    questions: shuffle(picked).slice(0, SESSION_SIZE),
+    weakTopics: weakTopics.slice(0, 3), // Show top 3 in the UI chips
+  };
 }
 
 function pickTopicQuestions(subject: "maths" | "english", topic: string, grade: string): Question[] {
