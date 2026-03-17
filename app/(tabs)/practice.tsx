@@ -21,6 +21,14 @@ import questionsData from "@/data/questions.json";
 const LETTER = ["A", "B", "C", "D"];
 const SESSION_SIZE = 10;
 
+// ─── DIFFICULTY LADDER ────────────────────────────────────────────────────────
+// Score < 30%  → Easy (foundational — catch-up questions)
+// Score 30–50% → Regular
+// Score 50–70% → Hard
+// Score > 70%  → Extra Hard
+const DIFFICULTY_ORDER = ["Easy", "Regular", "Hard", "Extra Hard"] as const;
+type Difficulty = (typeof DIFFICULTY_ORDER)[number];
+
 // ─── DIAGNOSTIC TOPIC → PRACTICE QUESTION TOPIC MAPPING ──────────────────────
 // Diagnostic uses broad curriculum labels; practice bank uses specific topic names.
 const DIAG_TO_PRACTICE_TOPICS: Record<string, string[]> = {
@@ -212,6 +220,7 @@ export default function PracticeScreen() {
   const [sessionSubject, setSessionSubject] = useState<"maths" | "english">("maths");
   const [sessionMode, setSessionMode] = useState<SessionMode>("topic");
   const [weakTopicsUsed, setWeakTopicsUsed] = useState<string[]>([]);
+  const [topicDifficulty, setTopicDifficulty] = useState<Record<string, Difficulty>>({}); // For smart mode
   const slideAnim = useRef(new Animated.Value(0)).current;
   const explainFade = useRef(new Animated.Value(0)).current;
   
@@ -230,8 +239,35 @@ export default function PracticeScreen() {
     if (!skillMap || !profile) return;
     const { questions: qs, weakTopics } = pickSmartQuestions(profile.grade, skillMap);
     if (qs.length === 0) return;
+    
+    // Initialise difficulty ladder based on diagnostic skill score
+    // Score < 30%  → Easy (foundational — catch-up questions)
+    // Score 30–50% → Regular
+    // Score 50–70% → Hard
+    // Score > 70%  → Extra Hard
+    const initialDifficulty: Record<string, Difficulty> = {};
+    for (const topic of weakTopics) {
+      const score = skillMap[topic] ?? 50;
+      if (score < 30)       initialDifficulty[topic] = "Easy";
+      else if (score < 50)  initialDifficulty[topic] = "Regular";
+      else if (score < 70)  initialDifficulty[topic] = "Hard";
+      else                  initialDifficulty[topic] = "Extra Hard";
+    }
+
+    // Topics in the session not in weakTopics get the same treatment
+    for (const q of qs) {
+      if (!initialDifficulty[q.topic]) {
+        const score = skillMap[q.topic] ?? 50;
+        if (score < 30)       initialDifficulty[q.topic] = "Easy";
+        else if (score < 50)  initialDifficulty[q.topic] = "Regular";
+        else if (score < 70)  initialDifficulty[q.topic] = "Hard";
+        else                  initialDifficulty[q.topic] = "Extra Hard";
+      }
+    }
+
     Haptics.selectionAsync();
     setWeakTopicsUsed(weakTopics);
+    setTopicDifficulty(initialDifficulty);
     setSessionMode("smart");
     setSessionSubject("maths");
     setSessionTopic("Smart Practice");
@@ -500,14 +536,33 @@ export default function PracticeScreen() {
             )}
             <Text style={styles.qBadgeTxt}>{currentIdx + 1} / {questions.length}</Text>
           </View>
-          {q.difficulty ? (
+          {q.difficulty || (sessionMode === "smart" && topicDifficulty[q.topic]) ? (
             <View style={[styles.diffPill, {
               backgroundColor:
-                q.difficulty === "Regular"    ? "rgba(255,255,255,0.2)" :
-                q.difficulty === "Hard"       ? Colors.light.gold + "50" :
-                                                Colors.light.rust + "50",
+                (sessionMode === "smart" ? topicDifficulty[q.topic] : q.difficulty) === "Easy"
+                  ? Colors.light.sage + "50"
+                  : (sessionMode === "smart" ? topicDifficulty[q.topic] : q.difficulty) === "Regular"
+                  ? "rgba(255,255,255,0.2)"
+                  : (sessionMode === "smart" ? topicDifficulty[q.topic] : q.difficulty) === "Hard"
+                  ? Colors.light.gold + "50"
+                  : Colors.light.rust + "50",
             }]}>
-              <Text style={styles.diffPillTxt}>{q.difficulty}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Ionicons 
+                  name={
+                    (sessionMode === "smart" ? topicDifficulty[q.topic] : q.difficulty) === "Easy"
+                      ? "leaf-outline"
+                      : (sessionMode === "smart" ? topicDifficulty[q.topic] : q.difficulty) === "Regular"
+                      ? "remove"
+                      : (sessionMode === "smart" ? topicDifficulty[q.topic] : q.difficulty) === "Hard"
+                      ? "trending-up"
+                      : "flame"
+                  }
+                  size={12}
+                  color="#fff"
+                />
+                <Text style={styles.diffPillTxt}>{sessionMode === "smart" ? topicDifficulty[q.topic] : q.difficulty}</Text>
+              </View>
             </View>
           ) : null}
           <View style={[styles.timerBadge, { backgroundColor: sessionMode === "smart" ? "rgba(255,255,255,0.2)" : (isLowTime ? Colors.light.rust + "20" : "rgba(255,255,255,0.2)") }]}>

@@ -1,0 +1,59 @@
+In app/(tabs)/practice.tsx, make the following changes:
+
+1. Replace the DIFFICULTY_ORDER constant with:
+// Initialise difficulty ladder based on diagnostic skill score
+// Score < 30%  → Easy (foundational — catch-up questions)
+// Score 30–50% → Regular
+// Score 50–70% → Hard
+// Score > 70%  → Extra Hard
+const initialDifficulty: Record<string, Difficulty> = {};
+for (const topic of weakTopics) {
+  const score = skillMap[topic] ?? 50;
+  if (score < 30)       initialDifficulty[topic] = "Easy";
+  else if (score < 50)  initialDifficulty[topic] = "Regular";
+  else if (score < 70)  initialDifficulty[topic] = "Hard";
+  else                  initialDifficulty[topic] = "Extra Hard";
+}
+
+// Topics in the session not in weakTopics get the same treatment
+for (const q of qs) {
+  if (!initialDifficulty[q.topic]) {
+    const score = skillMap[q.topic] ?? 50;
+    if (score < 30)       initialDifficulty[q.topic] = "Easy";
+    else if (score < 50)  initialDifficulty[q.topic] = "Regular";
+    else if (score < 70)  initialDifficulty[q.topic] = "Hard";
+    else                  initialDifficulty[q.topic] = "Extra Hard";
+  }
+}
+```
+
+2. Inside startSmartSession, replace the initialDifficulty 
+initialisation block with:
+const DIFFICULTY_ORDER = ["Easy", "Regular", "Hard", "Extra Hard"] as const;
+type Difficulty = (typeof DIFFICULTY_ORDER)[number];
+```
+
+3. In the difficulty pill backgroundColor logic, replace the 
+existing ternary with:
+backgroundColor:
+  (sessionMode === "smart" ? topicDifficulty[q.topic] : q.difficulty) === "Easy"
+    ? Colors.light.sage + "50"
+    : (sessionMode === "smart" ? topicDifficulty[q.topic] : q.difficulty) === "Regular"
+    ? "rgba(255,255,255,0.2)"
+    : (sessionMode === "smart" ? topicDifficulty[q.topic] : q.difficulty) === "Hard"
+    ? Colors.light.gold + "50"
+    : Colors.light.rust + "50",
+
+
+4. In the difficulty pill icon name logic, replace with:
+name={
+  (sessionMode === "smart" ? topicDifficulty[q.topic] : q.difficulty) === "Easy"
+    ? "leaf-outline"
+    : (sessionMode === "smart" ? topicDifficulty[q.topic] : q.difficulty) === "Regular"
+    ? "remove"
+    : (sessionMode === "smart" ? topicDifficulty[q.topic] : q.difficulty) === "Hard"
+    ? "trending-up"
+    : "flame"
+}
+
+
