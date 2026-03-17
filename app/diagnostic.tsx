@@ -65,39 +65,7 @@ function pickQuestions(grade: string): DiagQuestion[] {
   return selected.slice(0, SESSION_SIZE).sort(() => Math.random() - 0.5);
 }
 
-type Phase = "intro" | "quiz" | "calculating";
-type AnswerState = "unanswered" | "wrong" | "retry_correct" | "retry_wrong_again" | "correct_first";
-
-function ExplanationSteps({ text }: { text: string }) {
-  const steps = text.split("\n").filter((s) => s.trim().length > 0);
-  return (
-    <View style={explainSt.wrap}>
-      {steps.map((step, i) => {
-        const isCheck = step.startsWith("✓");
-        return (
-          <View key={i} style={explainSt.step}>
-            {isCheck ? (
-              <Ionicons name="checkmark-circle" size={16} color={Colors.light.sage} style={{ marginTop: 2 }} />
-            ) : (
-              <View style={[explainSt.dot, { backgroundColor: OPTION_COLORS[i % 4] }]} />
-            )}
-            <Text style={[explainSt.stepText, isCheck && explainSt.checkText]}>
-              {step.replace(/^✓\s*/, "")}
-            </Text>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-const explainSt = StyleSheet.create({
-  wrap: { gap: 10 },
-  step: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
-  dot: { width: 8, height: 8, borderRadius: 4, marginTop: 7, flexShrink: 0 },
-  stepText: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 14, color: Colors.light.text, lineHeight: 21 },
-  checkText: { color: Colors.light.sage, fontFamily: "Inter_500Medium" },
-});
+type Phase = "intro" | "quiz" | "summary";
 
 interface QuizResult {
   topic: string;
@@ -114,49 +82,24 @@ export default function DiagnosticScreen() {
   const [questions, setQuestions] = useState<DiagQuestion[]>([]);
   const [current, setCurrent] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
-  const [retrySelected, setRetrySelected] = useState<number | null>(null);
-  const [answerState, setAnswerState] = useState<AnswerState>("unanswered");
   const [results, setResults] = useState<QuizResult[]>([]);
   const slideAnim = useRef(new Animated.Value(0)).current;
-  const explainFade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (profile) setQuestions(pickQuestions(profile.grade));
   }, [profile]);
 
-  function animateExplain() {
-    explainFade.setValue(0);
-    Animated.timing(explainFade, { toValue: 1, duration: 350, useNativeDriver: true }).start();
-  }
-
-  function handleFirstSelect(idx: number) {
-    if (answerState !== "unanswered") return;
+  function handleSelect(idx: number) {
+    if (selected !== null) return; // Already answered
     Haptics.selectionAsync();
     const q = questions[current];
     const isCorrect = idx === q.correctIndex;
     setSelected(idx);
+    setResults((prev) => [...prev, { topic: q.topic, correct: isCorrect }]);
     if (isCorrect) {
-      setAnswerState("correct_first");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setResults((prev) => [...prev, { topic: q.topic, correct: true }]);
     } else {
-      setAnswerState("wrong");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      setResults((prev) => [...prev, { topic: q.topic, correct: false }]);
-    }
-    animateExplain();
-  }
-
-  function handleRetry(idx: number) {
-    const q = questions[current];
-    if (idx === selected) return;
-    Haptics.selectionAsync();
-    setRetrySelected(idx);
-    if (idx === q.correctIndex) {
-      setAnswerState("retry_correct");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } else {
-      setAnswerState("retry_wrong_again");
     }
   }
 
@@ -170,15 +113,16 @@ export default function DiagnosticScreen() {
       slideAnim.setValue(20);
       setCurrent((c) => c + 1);
       setSelected(null);
-      setRetrySelected(null);
-      setAnswerState("unanswered");
       Animated.timing(slideAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
     });
   }
 
   async function finishDiagnostic() {
-    setPhase("calculating");
+    // Show summary instead of calculating immediately
+    setPhase("summary");
+  }
 
+  async function saveSummaryAndNavigate() {
     // Build skillMap: topic → percentage (0–100)
     const topicCorrect: Record<string, number> = {};
     const topicTotal: Record<string, number> = {};
@@ -191,7 +135,7 @@ export default function DiagnosticScreen() {
       skillMap[topic] = Math.round(((topicCorrect[topic] ?? 0) / topicTotal[topic]) * 100);
     }
 
-    // Save diagnostic result (for legacy home screen baseline display)
+    // Save diagnostic result
     const totalCorrect = results.filter((r) => r.correct).length;
     await saveDiagnosticResult({
       date: new Date().toISOString(),
@@ -201,7 +145,7 @@ export default function DiagnosticScreen() {
       englishTotal: 0,
     });
 
-    // Save skillMap — this triggers home screen notification
+    // Save skillMap
     await saveSkillMap(skillMap);
 
     router.replace("/(tabs)");
@@ -225,7 +169,7 @@ export default function DiagnosticScreen() {
             { icon: "help-circle" as const, color: Colors.light.optionB, text: "20 questions across all major topics" },
             { icon: "map" as const, color: Colors.light.optionC, text: "Creates your personal Skill Map after the test" },
             { icon: "time" as const, color: Colors.light.gold, text: "Takes about 15–20 minutes" },
-            { icon: "bulb" as const, color: Colors.light.sage, text: "Wrong answers show a step-by-step explanation — then you try again!" },
+            { icon: "bulb" as const, color: Colors.light.sage, text: "Answer each question once — no retries" },
           ].map((item) => (
             <View key={item.text} style={[styles.infoCard, { borderLeftColor: item.color }]}>
               <Ionicons name={item.icon} size={22} color={item.color} />
@@ -241,15 +185,51 @@ export default function DiagnosticScreen() {
     );
   }
 
-  // ─── CALCULATING ────────────────────────────────────────────────────
-  if (phase === "calculating") {
+  // ─── SUMMARY ─────────────────────────────────────────────────────────
+  if (phase === "summary") {
+    const totalCorrect = results.filter((r) => r.correct).length;
+    const percentage = Math.round((totalCorrect / results.length) * 100);
+    const performanceMessage =
+      percentage >= 80 ? "Excellent foundation!" :
+      percentage >= 60 ? "Good grasp of the topics" :
+      percentage >= 40 ? "Room for improvement" :
+      "You'll benefit from focused practice";
+
     return (
-      <View style={[styles.calcRoot, { paddingTop: topPad }]}>
-        <View style={styles.calcIcon}>
-          <Ionicons name="map" size={52} color="#fff" />
-        </View>
-        <Text style={styles.calcTitle}>Building your Skill Map...</Text>
-        <Text style={styles.calcSub}>Analysing {results.length} answers across all topics</Text>
+      <View style={[styles.summaryRoot, { paddingTop: topPad, paddingBottom: bottomPad }]}>
+        <ScrollView contentContainerStyle={styles.summaryCont} showsVerticalScrollIndicator={false}>
+          <View style={styles.summaryHero}>
+            <View style={[styles.scoreIcon, { backgroundColor: percentage >= 70 ? Colors.light.sage : percentage >= 50 ? Colors.light.gold : Colors.light.rust }]}>
+              <Ionicons name={percentage >= 70 ? "checkmark-circle" : "alert-circle"} size={52} color="#fff" />
+            </View>
+            <Text style={styles.summaryTitle}>Test Complete!</Text>
+            <Text style={styles.summaryMessage}>{performanceMessage}</Text>
+          </View>
+
+          <View style={styles.scoreCard}>
+            <View style={styles.scoreRow}>
+              <Text style={styles.scoreLabel}>Your Score</Text>
+              <Text style={styles.scoreBig}>{totalCorrect}/{results.length}</Text>
+            </View>
+            <View style={styles.scoreBar}>
+              <View style={[styles.scoreBarFill, { width: `${percentage}%`, backgroundColor: percentage >= 70 ? Colors.light.sage : percentage >= 50 ? Colors.light.gold : Colors.light.rust }]} />
+            </View>
+            <View style={styles.percentRow}>
+              <Text style={styles.percentTxt}>{percentage}% correct</Text>
+            </View>
+          </View>
+
+          <View style={styles.nextCard}>
+            <Ionicons name="map" size={24} color={Colors.light.navy} />
+            <Text style={styles.nextCardTitle}>Your Skill Map</Text>
+            <Text style={styles.nextCardSub}>We're building a personalized map of your strengths and areas to focus on.</Text>
+          </View>
+
+          <TouchableOpacity style={styles.primaryBtn} onPress={saveSummaryAndNavigate}>
+            <Text style={styles.primaryBtnText}>View My Skill Map</Text>
+            <Ionicons name="arrow-forward" size={18} color="#fff" />
+          </TouchableOpacity>
+        </ScrollView>
       </View>
     );
   }
@@ -258,13 +238,8 @@ export default function DiagnosticScreen() {
   const q = questions[current];
   if (!q) return null;
 
-  const isWrong = answerState === "wrong";
-  const isCorrect = answerState === "correct_first";
-  const retryCorrect = answerState === "retry_correct";
-  const retryWrongAgain = answerState === "retry_wrong_again";
-  const showRetry = isWrong;
-  const showNext = isCorrect || retryCorrect || retryWrongAgain;
-  const revealed = answerState !== "unanswered";
+  const hasAnswered = selected !== null;
+  const isCorrect = hasAnswered && selected === q.correctIndex;
   const progress = (current + 1) / questions.length;
 
   return (
@@ -310,45 +285,34 @@ export default function DiagnosticScreen() {
               let borderColor = Colors.light.border;
               let labelBg = optColor;
               let textColor = Colors.light.text;
-              let touchDisabled = revealed;
 
-              if (showRetry) touchDisabled = i === selected;
-
-              if (!revealed) {
+              if (!hasAnswered) {
                 if (isSelected) { bg = optColor + "18"; borderColor = optColor; }
-              } else if (showRetry) {
-                if (isSelected) { bg = "#F5F5F5"; borderColor = "#CCC"; labelBg = "#AAA"; textColor = "#999"; }
               } else {
+                // Show correct answer
                 if (isCorrAns) { bg = Colors.light.sageLight; borderColor = Colors.light.sage; labelBg = Colors.light.sage; textColor = "#1A5E35"; }
+                // Dim incorrect selection
                 else if (isSelected && !isCorrAns) { bg = Colors.light.rustLight; borderColor = Colors.light.rust; labelBg = Colors.light.rust; textColor = Colors.light.rust; }
-              }
-
-              if ((retryCorrect || retryWrongAgain) && retrySelected !== null) {
-                if (isCorrAns) { bg = Colors.light.sageLight; borderColor = Colors.light.sage; labelBg = Colors.light.sage; textColor = "#1A5E35"; }
-                else if (retrySelected === i && !isCorrAns) { bg = Colors.light.rustLight; borderColor = Colors.light.rust; labelBg = Colors.light.rust; textColor = Colors.light.rust; }
-                else if (isSelected) { bg = "#F5F5F5"; borderColor = "#CCC"; labelBg = "#AAA"; textColor = "#999"; }
               }
 
               return (
                 <TouchableOpacity
                   key={i}
-                  style={[styles.optBtn, { backgroundColor: bg, borderColor },
-                    touchDisabled && !showRetry && styles.optDisabled]}
+                  style={[styles.optBtn, { backgroundColor: bg, borderColor }]}
                   onPress={() => {
-                    if (!revealed) handleFirstSelect(i);
-                    else if (showRetry && i !== selected) handleRetry(i);
+                    if (!hasAnswered) handleSelect(i);
                   }}
-                  disabled={touchDisabled && !showRetry}
-                  activeOpacity={touchDisabled && !showRetry ? 1 : 0.78}
+                  disabled={hasAnswered}
+                  activeOpacity={hasAnswered ? 1 : 0.78}
                 >
                   <View style={[styles.optBadge, { backgroundColor: labelBg }]}>
                     <Text style={styles.optBadgeTxt}>{LETTER[i]}</Text>
                   </View>
                   <Text style={[styles.optText, { color: textColor }]}>{opt}</Text>
-                  {(retryCorrect || isCorrect) && isCorrAns && (
+                  {hasAnswered && isCorrAns && (
                     <Ionicons name="checkmark-circle" size={22} color={Colors.light.sage} />
                   )}
-                  {retryWrongAgain && retrySelected === i && (
+                  {hasAnswered && isSelected && !isCorrAns && (
                     <Ionicons name="close-circle" size={22} color={Colors.light.rust} />
                   )}
                 </TouchableOpacity>
@@ -356,60 +320,28 @@ export default function DiagnosticScreen() {
             })}
           </View>
 
-          {/* Explanation section */}
-          {revealed && (
-            <Animated.View style={{ opacity: explainFade, gap: 14 }}>
-              {isWrong && (
-                <View style={styles.wrongBanner}>
-                  <Ionicons name="close-circle" size={20} color={Colors.light.rust} />
-                  <Text style={styles.wrongBannerText}>Not quite — let's understand why!</Text>
-                </View>
-              )}
-              {isCorrect && (
+          {/* Feedback and next button */}
+          {hasAnswered && (
+            <View style={{ gap: 14 }}>
+              {isCorrect ? (
                 <View style={styles.correctBanner}>
                   <Ionicons name="checkmark-circle" size={20} color={Colors.light.sage} />
-                  <Text style={styles.correctBannerText}>Correct! Well done!</Text>
+                  <Text style={styles.correctBannerText}>Correct!</Text>
                 </View>
-              )}
-              {retryCorrect && (
-                <View style={styles.correctBanner}>
-                  <Ionicons name="star" size={20} color={Colors.light.gold} />
-                  <Text style={styles.correctBannerText}>You've got it now! Great recovery!</Text>
-                </View>
-              )}
-              {retryWrongAgain && (
+              ) : (
                 <View style={styles.wrongBanner}>
-                  <Ionicons name="alert-circle" size={20} color={Colors.light.rust} />
-                  <Text style={styles.wrongBannerText}>Still incorrect — the correct answer is highlighted above.</Text>
+                  <Ionicons name="close-circle" size={20} color={Colors.light.rust} />
+                  <Text style={styles.wrongBannerText}>Incorrect — the correct answer is highlighted.</Text>
                 </View>
               )}
 
-              <View style={styles.explainCard}>
-                <View style={styles.explainHeader}>
-                  <Ionicons name="bulb" size={18} color={Colors.light.gold} />
-                  <Text style={styles.explainTitle}>
-                    {isCorrect ? "Why this is correct" : "Here's how to solve it"}
-                  </Text>
-                </View>
-                <ExplanationSteps text={q.explanation} />
-              </View>
-
-              {showRetry && (
-                <View style={styles.retryCard}>
-                  <Text style={styles.retryTitle}>Now you try!</Text>
-                  <Text style={styles.retrySub}>Tap the correct answer above to show you understand.</Text>
-                </View>
-              )}
-
-              {showNext && (
-                <TouchableOpacity style={styles.primaryBtn} onPress={handleNext}>
-                  <Text style={styles.primaryBtnText}>
-                    {current + 1 >= questions.length ? "Build My Skill Map" : "Next Question"}
-                  </Text>
-                  <Ionicons name={current + 1 >= questions.length ? "map" : "arrow-forward"} size={18} color="#fff" />
-                </TouchableOpacity>
-              )}
-            </Animated.View>
+              <TouchableOpacity style={styles.primaryBtn} onPress={handleNext}>
+                <Text style={styles.primaryBtnText}>
+                  {current + 1 >= questions.length ? "See My Results" : "Next Question"}
+                </Text>
+                <Ionicons name={current + 1 >= questions.length ? "bar-chart" : "arrow-forward"} size={18} color="#fff" />
+              </TouchableOpacity>
+            </View>
           )}
         </Animated.View>
       </ScrollView>
@@ -444,18 +376,24 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#fff" },
 
-  // Calculating
-  calcRoot: {
-    flex: 1, backgroundColor: Colors.light.navy,
-    justifyContent: "center", alignItems: "center", gap: 16, padding: 32,
-  },
-  calcIcon: {
-    width: 100, height: 100, borderRadius: 50,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    justifyContent: "center", alignItems: "center",
-  },
-  calcTitle: { fontFamily: "Inter_700Bold", fontSize: 24, color: "#fff", textAlign: "center" },
-  calcSub: { fontFamily: "Inter_400Regular", fontSize: 15, color: "rgba(255,255,255,0.75)", textAlign: "center" },
+  // Summary
+  summaryRoot: { flex: 1, backgroundColor: Colors.light.background },
+  summaryCont: { padding: 24, gap: 20, flexGrow: 1, justifyContent: "space-between" },
+  summaryHero: { alignItems: "center", gap: 16 },
+  scoreIcon: { width: 100, height: 100, borderRadius: 50, justifyContent: "center", alignItems: "center", marginBottom: 8 },
+  summaryTitle: { fontFamily: "Inter_700Bold", fontSize: 28, color: Colors.light.navy, textAlign: "center" },
+  summaryMessage: { fontFamily: "Inter_500Medium", fontSize: 16, color: Colors.light.textSecondary, textAlign: "center" },
+  scoreCard: { backgroundColor: Colors.light.card, borderRadius: 20, padding: 20, gap: 12 },
+  scoreRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  scoreLabel: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: Colors.light.textSecondary },
+  scoreBig: { fontFamily: "Inter_700Bold", fontSize: 28, color: Colors.light.navy },
+  scoreBar: { height: 12, backgroundColor: Colors.light.border, borderRadius: 6, overflow: "hidden" },
+  scoreBarFill: { height: "100%", borderRadius: 6 },
+  percentRow: { alignItems: "center" },
+  percentTxt: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: Colors.light.navy },
+  nextCard: { backgroundColor: Colors.light.optionB + "0F", borderRadius: 16, padding: 18, borderWidth: 2, borderColor: Colors.light.optionB + "30", alignItems: "center", gap: 10 },
+  nextCardTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: Colors.light.navy },
+  nextCardSub: { fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary, textAlign: "center", lineHeight: 20 },
 
   // Quiz
   quizRoot: { flex: 1, backgroundColor: Colors.light.background },
@@ -475,7 +413,6 @@ const styles = StyleSheet.create({
   questionText: { fontFamily: "Inter_600SemiBold", fontSize: 17, color: Colors.light.navy, lineHeight: 27 },
   options: { gap: 10 },
   optBtn: { flexDirection: "row", alignItems: "center", borderRadius: 16, padding: 14, borderWidth: 2, gap: 12 },
-  optDisabled: {},
   optBadge: { width: 34, height: 34, borderRadius: 10, justifyContent: "center", alignItems: "center" },
   optBadgeTxt: { fontFamily: "Inter_700Bold", fontSize: 15, color: "#fff" },
   optText: { flex: 1, fontFamily: "Inter_500Medium", fontSize: 15, lineHeight: 22 },
@@ -491,18 +428,4 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4, borderLeftColor: Colors.light.sage,
   },
   correctBannerText: { flex: 1, fontFamily: "Inter_600SemiBold", fontSize: 14, color: Colors.light.sage },
-  explainCard: {
-    backgroundColor: Colors.light.goldLight, borderRadius: 18, padding: 16, gap: 14,
-    borderLeftWidth: 4, borderLeftColor: Colors.light.gold,
-  },
-  explainHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
-  explainTitle: { fontFamily: "Inter_700Bold", fontSize: 15, color: "#8B5E00" },
-  retryCard: {
-    backgroundColor: Colors.light.optionB + "14",
-    borderRadius: 16, padding: 16,
-    borderWidth: 2, borderColor: Colors.light.optionB,
-    alignItems: "center", gap: 6,
-  },
-  retryTitle: { fontFamily: "Inter_700Bold", fontSize: 17, color: Colors.light.optionB },
-  retrySub: { fontFamily: "Inter_400Regular", fontSize: 14, color: Colors.light.textSecondary, textAlign: "center" },
 });
