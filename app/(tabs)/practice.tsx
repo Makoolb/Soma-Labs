@@ -15,6 +15,7 @@ import * as Haptics from "expo-haptics";
 import Colors, { OPTION_COLORS } from "@/constants/colors";
 import { useApp, type AnswerRecord, type SkillMap } from "@/context/AppContext";
 import { useTimer } from "@/lib/useTimer";
+import { useElapsedTime } from "@/lib/useElapsedTime";
 import questionsData from "@/data/questions.json";
 
 const LETTER = ["A", "B", "C", "D"];
@@ -213,7 +214,10 @@ export default function PracticeScreen() {
   const [weakTopicsUsed, setWeakTopicsUsed] = useState<string[]>([]);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const explainFade = useRef(new Animated.Value(0)).current;
-  const { formattedTime, isLowTime } = useTimer(questions.length > 0 ? Math.max(300, questions.length * 30) : 300); // 5-10 min
+  
+  // For smart practice: use elapsed time (indefinite). For regular: use countdown timer.
+  const { formattedTime: countdownTime, isLowTime } = useTimer(questions.length > 0 ? Math.max(300, questions.length * 30) : 300);
+  const { formattedTime: elapsedTime } = useElapsedTime();
 
   useEffect(() => {
     if (params.autoStart === "1" && params.subject && params.topic) {
@@ -506,9 +510,11 @@ export default function PracticeScreen() {
               <Text style={styles.diffPillTxt}>{q.difficulty}</Text>
             </View>
           ) : null}
-          <View style={[styles.timerBadge, { backgroundColor: isLowTime ? Colors.light.rust + "20" : "rgba(255,255,255,0.2)" }]}>
-            <Ionicons name="timer" size={14} color={isLowTime ? Colors.light.rust : "#fff"} />
-            <Text style={[styles.timerTxt, { color: isLowTime ? Colors.light.rust : "#fff" }]}>{formattedTime}</Text>
+          <View style={[styles.timerBadge, { backgroundColor: sessionMode === "smart" ? "rgba(255,255,255,0.2)" : (isLowTime ? Colors.light.rust + "20" : "rgba(255,255,255,0.2)") }]}>
+            <Ionicons name="timer" size={14} color={sessionMode === "smart" ? "#fff" : (isLowTime ? Colors.light.rust : "#fff")} />
+            <Text style={[styles.timerTxt, { color: sessionMode === "smart" ? "#fff" : (isLowTime ? Colors.light.rust : "#fff") }]}>
+              {sessionMode === "smart" ? elapsedTime : countdownTime}
+            </Text>
           </View>
         </View>
         <View style={styles.progressTrack}>

@@ -14,7 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors, { OPTION_COLORS } from "@/constants/colors";
 import { useApp, type SkillMap } from "@/context/AppContext";
-import { useTimer } from "@/lib/useTimer";
+import { useElapsedTime } from "@/lib/useElapsedTime";
 import diagData from "@/data/diagnosticQuestions.json";
 
 interface DiagQuestion {
@@ -85,7 +85,7 @@ export default function DiagnosticScreen() {
   const [selected, setSelected] = useState<number | null>(null);
   const [results, setResults] = useState<QuizResult[]>([]);
   const slideAnim = useRef(new Animated.Value(0)).current;
-  const { formattedTime, isLowTime } = useTimer(600); // 10 minutes
+  const { formattedTime } = useElapsedTime();
 
   useEffect(() => {
     if (profile) setQuestions(pickQuestions(profile.grade));
@@ -262,9 +262,9 @@ export default function DiagnosticScreen() {
           }]}>
             <Text style={styles.diffPillTxt}>{q.difficulty}</Text>
           </View>
-          <View style={[styles.timerBadge, { backgroundColor: isLowTime ? Colors.light.rust + "20" : "rgba(255,255,255,0.2)" }]}>
-            <Ionicons name="timer" size={14} color={isLowTime ? Colors.light.rust : "#fff"} />
-            <Text style={[styles.timerTxt, { color: isLowTime ? Colors.light.rust : "#fff" }]}>{formattedTime}</Text>
+          <View style={[styles.timerBadge, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+            <Ionicons name="timer" size={14} color="#fff" />
+            <Text style={[styles.timerTxt, { color: "#fff" }]}>{formattedTime}</Text>
           </View>
         </View>
         <View style={styles.progressTrack}>
