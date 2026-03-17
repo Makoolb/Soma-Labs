@@ -18,10 +18,6 @@ function NativeTabLayout() {
         <Icon sf={{ default: "pencil", selected: "pencil.fill" }} />
         <Label>Practice</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="progress">
-        <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
-        <Label>Progress</Label>
-      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="parent">
         <Icon sf={{ default: "person.2", selected: "person.2.fill" }} />
         <Label>Parent</Label>
@@ -75,15 +71,6 @@ function ClassicTabLayout() {
           title: "Practice",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? "pencil" : "pencil-outline"} size={24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="progress"
-        options={{
-          title: "Progress",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "bar-chart" : "bar-chart-outline"} size={24} color={color} />
           ),
         }}
       />
