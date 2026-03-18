@@ -12,10 +12,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import Colors, { OPTION_COLORS } from "@/constants/colors";
+import * as Speech from "expo-speech";
+import Colors from "@/constants/colors";
 import { useApp, type SkillMap } from "@/context/AppContext";
 import { useElapsedTime } from "@/lib/useElapsedTime";
 import diagData from "@/data/diagnosticQuestions.json";
+
+// ─── TYPES ────────────────────────────────────────────────────────────────────
 
 interface DiagQuestion {
   id: string;
@@ -29,15 +32,27 @@ interface DiagQuestion {
   explanation: string;
 }
 
+interface QuizResult {
+  questionIdx: number;
+  topic: string;
+  correct: boolean;
+  skipped: boolean;
+  selectedIndex: number | null;
+}
+
+type Phase = "intro" | "quiz" | "summary" | "corrections";
+
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+
 const LETTER = ["A", "B", "C", "D"];
 const SESSION_SIZE = 20;
 
-// Pick 20 questions with balanced topic coverage
+// ─── QUESTION PICKER ─────────────────────────────────────────────────────────
+
 function pickQuestions(grade: string): DiagQuestion[] {
   const pool: DiagQuestion[] = ((diagData as Record<string, DiagQuestion[]>)[grade] ?? []);
   if (pool.length === 0) return [];
 
-  // Group by topic
   const byTopic: Record<string, DiagQuestion[]> = {};
   for (const q of pool) {
     if (!byTopic[q.topic]) byTopic[q.topic] = [];
@@ -47,14 +62,12 @@ function pickQuestions(grade: string): DiagQuestion[] {
   const selected: DiagQuestion[] = [];
   const used = new Set<string>();
 
-  // 1. Pick 1 from each topic first (shuffle within topic)
   for (const topicQs of Object.values(byTopic)) {
     const shuffled = [...topicQs].sort(() => Math.random() - 0.5);
     const pick = shuffled[0];
     if (pick) { selected.push(pick); used.add(pick.id); }
   }
 
-  // 2. Fill remaining slots from the full pool (not yet used)
   const remaining = pool.filter((q) => !used.has(q.id)).sort(() => Math.random() - 0.5);
   for (const q of remaining) {
     if (selected.length >= SESSION_SIZE) break;
@@ -62,17 +75,10 @@ function pickQuestions(grade: string): DiagQuestion[] {
     used.add(q.id);
   }
 
-  // Shuffle final order
   return selected.slice(0, SESSION_SIZE).sort(() => Math.random() - 0.5);
 }
 
-type Phase = "intro" | "quiz" | "summary";
-
-interface QuizResult {
-  topic: string;
-  correct: boolean;
-  skipped: boolean;
-}
+// ─── SCREEN ───────────────────────────────────────────────────────────────────
 
 export default function DiagnosticScreen() {
   const insets = useSafeAreaInsets();
@@ -85,6 +91,9 @@ export default function DiagnosticScreen() {
   const [current, setCurrent] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [results, setResults] = useState<QuizResult[]>([]);
+  const [correctionIdx, setCorrectionIdx] = useState(0);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
   const slideAnim = useRef(new Animated.Value(0)).current;
   const { formattedTime } = useElapsedTime();
 
@@ -92,47 +101,16 @@ export default function DiagnosticScreen() {
     if (profile) setQuestions(pickQuestions(profile.grade));
   }, [profile]);
 
-  function handleSelect(idx: number) {
-    if (selected !== null) return; // Already answered
-    Haptics.selectionAsync();
-    const q = questions[current];
-    const isCorrect = idx === q.correctIndex;
-    setSelected(idx);
-    setResults((prev) => [...prev, { topic: q.topic, correct: isCorrect, skipped: false }]);
-  }
+  // Stop speech when navigating away from corrections or between corrections
+  useEffect(() => {
+    return () => { Speech.stop(); };
+  }, [correctionIdx, phase]);
 
-  function handleSkip() {
-    Haptics.selectionAsync();
-    const q = questions[current];
-    setResults((prev) => [...prev, { topic: q.topic, correct: false, skipped: true }]);
-    setSelected(null);
-    handleNext();
-  }
+  // ─── SAVE & NAVIGATE ────────────────────────────────────────────────
 
-  async function handleNext() {
-    Haptics.selectionAsync();
-    if (current + 1 >= questions.length) {
-      await finishDiagnostic();
-      return;
-    }
-    Animated.timing(slideAnim, { toValue: -20, duration: 120, useNativeDriver: true }).start(() => {
-      slideAnim.setValue(20);
-      setCurrent((c) => c + 1);
-      setSelected(null);
-      Animated.timing(slideAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
-    });
-  }
+  async function saveAndNavigate(finalResults: QuizResult[]) {
+    const answeredResults = finalResults.filter((r) => !r.skipped);
 
-  async function finishDiagnostic() {
-    // Show summary instead of calculating immediately
-    setPhase("summary");
-  }
-
-  async function saveSummaryAndNavigate() {
-    // Count only non-skipped answers
-    const answeredResults = results.filter((r) => !r.skipped);
-    
-    // Build skillMap: topic → percentage (0–100)
     const topicCorrect: Record<string, number> = {};
     const topicTotal: Record<string, number> = {};
     for (const r of answeredResults) {
@@ -144,7 +122,6 @@ export default function DiagnosticScreen() {
       skillMap[topic] = Math.round(((topicCorrect[topic] ?? 0) / topicTotal[topic]) * 100);
     }
 
-    // Save diagnostic result (only count answered questions)
     const totalCorrect = answeredResults.filter((r) => r.correct).length;
     await saveDiagnosticResult({
       date: new Date().toISOString(),
@@ -154,13 +131,95 @@ export default function DiagnosticScreen() {
       englishTotal: 0,
     });
 
-    // Save skillMap
     await saveSkillMap(skillMap);
-
     router.replace("/(tabs)");
   }
 
+  // ─── QUIZ LOGIC ─────────────────────────────────────────────────────
+
+  function handleSelect(idx: number) {
+    if (selected !== null) return;
+    Haptics.selectionAsync();
+    const q = questions[current];
+    const isCorrect = idx === q.correctIndex;
+    setSelected(idx);
+    setResults((prev) => [
+      ...prev,
+      { questionIdx: current, topic: q.topic, correct: isCorrect, skipped: false, selectedIndex: idx },
+    ]);
+  }
+
+  function handleSkip() {
+    Haptics.selectionAsync();
+    const q = questions[current];
+    const isLast = current + 1 >= questions.length;
+
+    setResults((prev) => {
+      const updated: QuizResult[] = [
+        ...prev,
+        { questionIdx: current, topic: q.topic, correct: false, skipped: true, selectedIndex: null },
+      ];
+      if (isLast) {
+        setTimeout(() => setPhase("summary"), 0);
+      }
+      return updated;
+    });
+
+    if (!isLast) {
+      setSelected(null);
+      advanceQuestion();
+    }
+  }
+
+  function handleNext() {
+    Haptics.selectionAsync();
+    if (current + 1 >= questions.length) {
+      setPhase("summary");
+      return;
+    }
+    advanceQuestion();
+  }
+
+  function advanceQuestion() {
+    Animated.timing(slideAnim, { toValue: -20, duration: 120, useNativeDriver: true }).start(() => {
+      slideAnim.setValue(20);
+      setCurrent((c) => c + 1);
+      setSelected(null);
+      Animated.timing(slideAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+    });
+  }
+
+  // ─── SPEECH ─────────────────────────────────────────────────────────
+
+  function handleListen(text: string) {
+    if (isSpeaking) {
+      Speech.stop();
+      setIsSpeaking(false);
+      return;
+    }
+    setIsSpeaking(true);
+
+    const trySpeak = (lang: string, fallbackLang?: string) => {
+      Speech.speak(text, {
+        language: lang,
+        rate: 0.88,
+        onDone: () => setIsSpeaking(false),
+        onStopped: () => setIsSpeaking(false),
+        onError: () => {
+          if (fallbackLang) {
+            trySpeak(fallbackLang);
+          } else {
+            setIsSpeaking(false);
+          }
+        },
+      });
+    };
+
+    trySpeak("en-NG", "en-GB");
+  }
+
   // ─── INTRO ──────────────────────────────────────────────────────────
+
   if (phase === "intro") {
     return (
       <View style={[styles.introRoot, { paddingTop: topPad }]}>
@@ -178,7 +237,7 @@ export default function DiagnosticScreen() {
             { icon: "help-circle" as const, color: Colors.light.optionB, text: "20 questions across all major topics" },
             { icon: "map" as const, color: Colors.light.optionC, text: "Creates your personal Skill Map after the test" },
             { icon: "time" as const, color: Colors.light.gold, text: "No time limit — take as long as you need" },
-            { icon: "bulb" as const, color: Colors.light.sage, text: "Answer or skip each question — results shown at the end" },
+            { icon: "bulb" as const, color: Colors.light.sage, text: "Answer or skip — results and corrections shown at the end" },
           ].map((item) => (
             <View key={item.text} style={[styles.infoCard, { borderLeftColor: item.color }]}>
               <Ionicons name={item.icon} size={22} color={item.color} />
@@ -195,11 +254,14 @@ export default function DiagnosticScreen() {
   }
 
   // ─── SUMMARY ─────────────────────────────────────────────────────────
+
   if (phase === "summary") {
     const answeredResults = results.filter((r) => !r.skipped);
     const totalCorrect = answeredResults.filter((r) => r.correct).length;
     const totalAnswered = answeredResults.length;
+    const totalWrong = answeredResults.filter((r) => !r.correct).length;
     const totalSkipped = results.filter((r) => r.skipped).length;
+    const needsCorrection = results.filter((r) => !r.correct);
     const percentage = totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0;
     const performanceMessage =
       percentage >= 80 ? "Excellent foundation!" :
@@ -211,7 +273,9 @@ export default function DiagnosticScreen() {
       <View style={[styles.summaryRoot, { paddingTop: topPad, paddingBottom: bottomPad }]}>
         <ScrollView contentContainerStyle={styles.summaryCont} showsVerticalScrollIndicator={false}>
           <View style={styles.summaryHero}>
-            <View style={[styles.scoreIcon, { backgroundColor: percentage >= 70 ? Colors.light.sage : percentage >= 50 ? Colors.light.gold : Colors.light.rust }]}>
+            <View style={[styles.scoreIcon, {
+              backgroundColor: percentage >= 70 ? Colors.light.sage : percentage >= 50 ? Colors.light.gold : Colors.light.rust,
+            }]}>
               <Ionicons name={percentage >= 70 ? "checkmark-circle" : "alert-circle"} size={52} color="#fff" />
             </View>
             <Text style={styles.summaryTitle}>Test Complete!</Text>
@@ -224,32 +288,205 @@ export default function DiagnosticScreen() {
               <Text style={styles.scoreBig}>{totalCorrect}/{totalAnswered}</Text>
             </View>
             <View style={styles.scoreBar}>
-              <View style={[styles.scoreBarFill, { width: `${percentage}%`, backgroundColor: percentage >= 70 ? Colors.light.sage : percentage >= 50 ? Colors.light.gold : Colors.light.rust }]} />
+              <View style={[styles.scoreBarFill, {
+                width: `${percentage}%`,
+                backgroundColor: percentage >= 70 ? Colors.light.sage : percentage >= 50 ? Colors.light.gold : Colors.light.rust,
+              }]} />
             </View>
-            <View style={styles.percentRow}>
-              <Text style={styles.percentTxt}>{percentage}% correct</Text>
+            <Text style={styles.percentTxt}>{percentage}% correct</Text>
+
+            <View style={styles.statRow}>
+              <View style={[styles.statChip, { backgroundColor: Colors.light.sage + "18", borderColor: Colors.light.sage + "40" }]}>
+                <Ionicons name="checkmark-circle" size={16} color={Colors.light.sage} />
+                <Text style={[styles.statChipTxt, { color: Colors.light.sage }]}>{totalCorrect} correct</Text>
+              </View>
+              {totalWrong > 0 && (
+                <View style={[styles.statChip, { backgroundColor: Colors.light.rust + "18", borderColor: Colors.light.rust + "40" }]}>
+                  <Ionicons name="close-circle" size={16} color={Colors.light.rust} />
+                  <Text style={[styles.statChipTxt, { color: Colors.light.rust }]}>{totalWrong} wrong</Text>
+                </View>
+              )}
+              {totalSkipped > 0 && (
+                <View style={[styles.statChip, { backgroundColor: Colors.light.gold + "18", borderColor: Colors.light.gold + "40" }]}>
+                  <Ionicons name="arrow-forward-circle" size={16} color={Colors.light.gold} />
+                  <Text style={[styles.statChipTxt, { color: Colors.light.gold }]}>{totalSkipped} skipped</Text>
+                </View>
+              )}
             </View>
-            {totalSkipped > 0 && (
-              <Text style={styles.skippedTxt}>{totalSkipped} question{totalSkipped !== 1 ? "s" : ""} skipped</Text>
-            )}
           </View>
 
-          <View style={styles.nextCard}>
-            <Ionicons name="map" size={24} color={Colors.light.navy} />
-            <Text style={styles.nextCardTitle}>Your Skill Map</Text>
-            <Text style={styles.nextCardSub}>We're building a personalized map of your strengths and areas to focus on.</Text>
-          </View>
+          {needsCorrection.length > 0 && (
+            <TouchableOpacity
+              style={styles.reviewBtn}
+              onPress={() => { setCorrectionIdx(0); setPhase("corrections"); }}
+            >
+              <Ionicons name="school" size={20} color="#fff" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.reviewBtnTitle}>Review Corrections</Text>
+                <Text style={styles.reviewBtnSub}>{needsCorrection.length} question{needsCorrection.length !== 1 ? "s" : ""} to review</Text>
+              </View>
+              <Ionicons name="arrow-forward" size={18} color="#fff" />
+            </TouchableOpacity>
+          )}
 
-          <TouchableOpacity style={styles.primaryBtn} onPress={saveSummaryAndNavigate}>
-            <Text style={styles.primaryBtnText}>View My Skill Map</Text>
-            <Ionicons name="arrow-forward" size={18} color="#fff" />
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => saveAndNavigate(results)}>
+            <Text style={styles.primaryBtnText}>
+              {needsCorrection.length > 0 ? "Skip to Skill Map" : "View My Skill Map"}
+            </Text>
+            <Ionicons name="map" size={18} color="#fff" />
           </TouchableOpacity>
         </ScrollView>
       </View>
     );
   }
 
+  // ─── CORRECTIONS ─────────────────────────────────────────────────────
+
+  if (phase === "corrections") {
+    const wrongItems = results.filter((r) => !r.correct);
+    const item = wrongItems[correctionIdx];
+    if (!item) return null;
+    const q = questions[item.questionIdx];
+    if (!q) return null;
+
+    const isLast = correctionIdx + 1 >= wrongItems.length;
+
+    function handleNextCorrection() {
+      Haptics.selectionAsync();
+      Speech.stop();
+      setIsSpeaking(false);
+      if (isLast) {
+        saveAndNavigate(results);
+      } else {
+        setCorrectionIdx((i) => i + 1);
+      }
+    }
+
+    return (
+      <View style={[styles.quizRoot, { paddingTop: topPad }]}>
+        {/* Header */}
+        <View style={[styles.quizBar, { backgroundColor: Colors.light.rust }]}>
+          <View style={styles.quizBarTop}>
+            <View style={styles.qBadge}>
+              <Text style={styles.qBadgeTxt}>{correctionIdx + 1} / {wrongItems.length}</Text>
+            </View>
+            <View style={styles.topicPill}>
+              <Text style={styles.topicPillTxt}>{q.topic}</Text>
+            </View>
+            <View style={[styles.diffPill, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+              <Text style={styles.diffPillTxt}>{item.skipped ? "Skipped" : "Wrong"}</Text>
+            </View>
+          </View>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, {
+              width: `${((correctionIdx + 1) / wrongItems.length) * 100}%`,
+              backgroundColor: "#fff",
+            }]} />
+          </View>
+        </View>
+
+        <ScrollView
+          contentContainerStyle={[styles.quizScroll, { paddingBottom: bottomPad + 24 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={{ gap: 14 }}>
+            {/* Question */}
+            <View style={styles.questionCard}>
+              <Text style={styles.subtopicLabel}>{q.subtopic}</Text>
+              <Text style={styles.questionText}>{q.question}</Text>
+            </View>
+
+            {/* Options — correct green, wrong answer red */}
+            <View style={styles.options}>
+              {q.options.map((opt, i) => {
+                const isCorrect = i === q.correctIndex;
+                const isWrongPick = !item.skipped && item.selectedIndex === i && !isCorrect;
+
+                let bg = Colors.light.card;
+                let borderColor = Colors.light.border;
+                let labelBg = Colors.light.optionB;
+                let textColor = Colors.light.text;
+                let icon: "checkmark-circle" | "close-circle" | null = null;
+
+                if (isCorrect) {
+                  bg = Colors.light.sageLight;
+                  borderColor = Colors.light.sage;
+                  labelBg = Colors.light.sage;
+                  textColor = "#1A5E35";
+                  icon = "checkmark-circle";
+                } else if (isWrongPick) {
+                  bg = Colors.light.rustLight;
+                  borderColor = Colors.light.rust;
+                  labelBg = Colors.light.rust;
+                  textColor = Colors.light.rust;
+                  icon = "close-circle";
+                }
+
+                return (
+                  <View
+                    key={i}
+                    style={[styles.optBtn, { backgroundColor: bg, borderColor }]}
+                  >
+                    <View style={[styles.optBadge, { backgroundColor: labelBg }]}>
+                      <Text style={styles.optBadgeTxt}>{LETTER[i]}</Text>
+                    </View>
+                    <Text style={[styles.optText, { color: textColor }]}>{opt}</Text>
+                    {icon && (
+                      <Ionicons
+                        name={icon}
+                        size={22}
+                        color={isCorrect ? Colors.light.sage : Colors.light.rust}
+                      />
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* Explanation */}
+            <View style={styles.explanationCard}>
+              <View style={styles.explanationHeader}>
+                <Ionicons name="bulb" size={20} color={Colors.light.gold} />
+                <Text style={styles.explanationTitle}>Explanation</Text>
+                <TouchableOpacity
+                  style={[styles.listenBtn, isSpeaking && styles.listenBtnActive]}
+                  onPress={() => handleListen(q.explanation)}
+                >
+                  <Ionicons
+                    name={isSpeaking ? "stop-circle" : "volume-high"}
+                    size={16}
+                    color={isSpeaking ? Colors.light.rust : Colors.light.navy}
+                  />
+                  <Text style={[styles.listenBtnTxt, isSpeaking && { color: Colors.light.rust }]}>
+                    {isSpeaking ? "Stop" : "Listen"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.explanationText}>{q.explanation}</Text>
+            </View>
+
+            {/* Navigation buttons */}
+            <TouchableOpacity style={styles.primaryBtn} onPress={handleNextCorrection}>
+              <Text style={styles.primaryBtnText}>
+                {isLast ? "View My Skill Map" : "Next Correction"}
+              </Text>
+              <Ionicons name={isLast ? "map" : "arrow-forward"} size={18} color="#fff" />
+            </TouchableOpacity>
+
+            {!isLast && (
+              <TouchableOpacity style={styles.skipBtn} onPress={() => saveAndNavigate(results)}>
+                <Ionicons name="map-outline" size={16} color={Colors.light.textSecondary} />
+                <Text style={styles.skipBtnText}>Skip to Skill Map</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
   // ─── QUIZ ────────────────────────────────────────────────────────────
+
   const q = questions[current];
   if (!q) return null;
 
@@ -258,7 +495,6 @@ export default function DiagnosticScreen() {
 
   return (
     <View style={[styles.quizRoot, { paddingTop: topPad }]}>
-      {/* Header bar */}
       <View style={styles.quizBar}>
         <View style={styles.quizBarTop}>
           <View style={styles.qBadge}>
@@ -270,13 +506,14 @@ export default function DiagnosticScreen() {
           <View style={[styles.diffPill, {
             backgroundColor:
               q.difficulty === "Regular" ? "rgba(255,255,255,0.18)" :
-                q.difficulty === "Hard" ? Colors.light.gold + "60" : Colors.light.rust + "60",
+              q.difficulty === "Hard" ? Colors.light.gold + "60" :
+              Colors.light.rust + "60",
           }]}>
             <Text style={styles.diffPillTxt}>{q.difficulty}</Text>
           </View>
-          <View style={[styles.timerBadge, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+          <View style={styles.timerBadge}>
             <Ionicons name="timer" size={14} color="#fff" />
-            <Text style={[styles.timerTxt, { color: "#fff" }]}>{formattedTime}</Text>
+            <Text style={styles.timerTxt}>{formattedTime}</Text>
           </View>
         </View>
         <View style={styles.progressTrack}>
@@ -284,44 +521,36 @@ export default function DiagnosticScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={[styles.quizScroll, { paddingBottom: bottomPad + 20 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.quizScroll, { paddingBottom: bottomPad + 20 }]}
+        showsVerticalScrollIndicator={false}
+      >
         <Animated.View style={{ transform: [{ translateY: slideAnim }], gap: 14 }}>
-          {/* Question card */}
+          {/* Question */}
           <View style={styles.questionCard}>
             <Text style={styles.subtopicLabel}>{q.subtopic}</Text>
             <Text style={styles.questionText}>{q.question}</Text>
           </View>
 
-          {/* Options */}
+          {/* Options — no feedback revealed */}
           <View style={styles.options}>
             {q.options.map((opt, i) => {
-              const optColor = Colors.light.optionB;
               const isSelected = selected === i;
-
-              let bg = Colors.light.card;
-              let borderColor = Colors.light.border;
-              let labelBg = optColor;
-              let textColor = Colors.light.text;
-
-              if (isSelected) { 
-                bg = optColor + "18"; 
-                borderColor = optColor; 
-              }
+              const bg = isSelected ? Colors.light.optionB + "18" : Colors.light.card;
+              const borderColor = isSelected ? Colors.light.optionB : Colors.light.border;
 
               return (
                 <TouchableOpacity
                   key={i}
                   style={[styles.optBtn, { backgroundColor: bg, borderColor }]}
-                  onPress={() => {
-                    if (!hasAnswered) handleSelect(i);
-                  }}
+                  onPress={() => { if (!hasAnswered) handleSelect(i); }}
                   disabled={hasAnswered}
                   activeOpacity={hasAnswered ? 1 : 0.78}
                 >
-                  <View style={[styles.optBadge, { backgroundColor: labelBg }]}>
+                  <View style={[styles.optBadge, { backgroundColor: Colors.light.optionB }]}>
                     <Text style={styles.optBadgeTxt}>{LETTER[i]}</Text>
                   </View>
-                  <Text style={[styles.optText, { color: textColor }]}>{opt}</Text>
+                  <Text style={[styles.optText, { color: Colors.light.text }]}>{opt}</Text>
                   {isSelected && (
                     <Ionicons name="checkmark-circle" size={22} color={Colors.light.optionB} />
                   )}
@@ -330,23 +559,23 @@ export default function DiagnosticScreen() {
             })}
           </View>
 
-          {/* Action buttons */}
+          {/* Action */}
           {hasAnswered ? (
-            <View style={{ gap: 10 }}>
-              <TouchableOpacity style={styles.primaryBtn} onPress={handleNext}>
-                <Text style={styles.primaryBtnText}>
-                  {current + 1 >= questions.length ? "See My Results" : "Next Question"}
-                </Text>
-                <Ionicons name={current + 1 >= questions.length ? "bar-chart" : "arrow-forward"} size={18} color="#fff" />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity style={styles.primaryBtn} onPress={handleNext}>
+              <Text style={styles.primaryBtnText}>
+                {current + 1 >= questions.length ? "See My Results" : "Next Question"}
+              </Text>
+              <Ionicons
+                name={current + 1 >= questions.length ? "bar-chart" : "arrow-forward"}
+                size={18}
+                color="#fff"
+              />
+            </TouchableOpacity>
           ) : (
-            <View style={{ gap: 10 }}>
-              <TouchableOpacity style={styles.skipBtn} onPress={handleSkip}>
-                <Ionicons name="arrow-forward" size={16} color={Colors.light.textSecondary} />
-                <Text style={styles.skipBtnText}>Skip this question</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity style={styles.skipBtn} onPress={handleSkip}>
+              <Ionicons name="arrow-forward" size={16} color={Colors.light.textSecondary} />
+              <Text style={styles.skipBtnText}>Skip this question</Text>
+            </TouchableOpacity>
           )}
         </Animated.View>
       </ScrollView>
@@ -354,41 +583,61 @@ export default function DiagnosticScreen() {
   );
 }
 
+// ─── STYLES ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  // Intro
+  // ── Intro ──
   introRoot: { flex: 1, backgroundColor: Colors.light.navy },
-  introHero: { alignItems: "center", paddingHorizontal: 24, paddingTop: 24, paddingBottom: 28, gap: 10 },
+  introHero: {
+    alignItems: "center", paddingHorizontal: 24,
+    paddingTop: 24, paddingBottom: 28, gap: 10,
+  },
   introIconWrap: {
     width: 90, height: 90, borderRadius: 45,
     backgroundColor: "rgba(255,255,255,0.2)",
     justifyContent: "center", alignItems: "center", marginBottom: 4,
   },
   introTitle: { fontFamily: "Inter_700Bold", fontSize: 26, color: "#fff", textAlign: "center" },
-  introSub: { fontFamily: "Inter_400Regular", fontSize: 15, color: "rgba(255,255,255,0.8)", textAlign: "center", lineHeight: 22 },
+  introSub: {
+    fontFamily: "Inter_400Regular", fontSize: 15,
+    color: "rgba(255,255,255,0.8)", textAlign: "center", lineHeight: 22,
+  },
   introBody: {
-    backgroundColor: Colors.light.background, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    backgroundColor: Colors.light.background,
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
     padding: 24, gap: 14, flexGrow: 1,
   },
   infoCard: {
     flexDirection: "row", alignItems: "center", gap: 12,
-    backgroundColor: Colors.light.card, borderRadius: 14, padding: 14, borderLeftWidth: 4,
+    backgroundColor: Colors.light.card, borderRadius: 14,
+    padding: 14, borderLeftWidth: 4,
   },
   infoText: { fontFamily: "Inter_500Medium", fontSize: 14, color: Colors.light.text, flex: 1 },
+
+  // ── Buttons ──
   primaryBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
     backgroundColor: Colors.light.gold, borderRadius: 18, paddingVertical: 18,
-    shadowColor: Colors.light.gold, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6,
+    shadowColor: Colors.light.gold,
+    shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6,
   },
   primaryBtnText: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#fff" },
   skipBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    backgroundColor: Colors.light.card, borderRadius: 18, paddingVertical: 16, borderWidth: 2, borderColor: Colors.light.border,
+    backgroundColor: Colors.light.card, borderRadius: 18, paddingVertical: 16,
+    borderWidth: 2, borderColor: Colors.light.border,
   },
   skipBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: Colors.light.textSecondary },
+  reviewBtn: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    backgroundColor: Colors.light.navy, borderRadius: 18, padding: 18,
+  },
+  reviewBtnTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#fff" },
+  reviewBtnSub: { fontFamily: "Inter_400Regular", fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 2 },
 
-  // Summary
+  // ── Summary ──
   summaryRoot: { flex: 1, backgroundColor: Colors.light.background },
-  summaryCont: { padding: 24, gap: 20, flexGrow: 1, justifyContent: "space-between" },
+  summaryCont: { padding: 24, gap: 20, flexGrow: 1 },
   summaryHero: { alignItems: "center", gap: 16 },
   scoreIcon: { width: 100, height: 100, borderRadius: 50, justifyContent: "center", alignItems: "center", marginBottom: 8 },
   summaryTitle: { fontFamily: "Inter_700Bold", fontSize: 28, color: Colors.light.navy, textAlign: "center" },
@@ -399,16 +648,20 @@ const styles = StyleSheet.create({
   scoreBig: { fontFamily: "Inter_700Bold", fontSize: 28, color: Colors.light.navy },
   scoreBar: { height: 12, backgroundColor: Colors.light.border, borderRadius: 6, overflow: "hidden" },
   scoreBarFill: { height: "100%", borderRadius: 6 },
-  percentRow: { alignItems: "center" },
-  percentTxt: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: Colors.light.navy },
-  skippedTxt: { fontFamily: "Inter_400Regular", fontSize: 12, color: Colors.light.textSecondary, marginTop: 4 },
-  nextCard: { backgroundColor: Colors.light.optionB + "0F", borderRadius: 16, padding: 18, borderWidth: 2, borderColor: Colors.light.optionB + "30", alignItems: "center", gap: 10 },
-  nextCardTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: Colors.light.navy },
-  nextCardSub: { fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary, textAlign: "center", lineHeight: 20 },
+  percentTxt: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: Colors.light.navy, textAlign: "center" },
+  statRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
+  statChip: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1,
+  },
+  statChipTxt: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
 
-  // Quiz
+  // ── Quiz / Corrections shared ──
   quizRoot: { flex: 1, backgroundColor: Colors.light.background },
-  quizBar: { backgroundColor: Colors.light.navy, paddingHorizontal: 16, paddingBottom: 14, paddingTop: 12, gap: 10 },
+  quizBar: {
+    backgroundColor: Colors.light.navy,
+    paddingHorizontal: 16, paddingBottom: 14, paddingTop: 12, gap: 10,
+  },
   quizBarTop: { flexDirection: "row", alignItems: "center", gap: 8 },
   qBadge: { backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 5 },
   qBadgeTxt: { fontFamily: "Inter_700Bold", fontSize: 13, color: "#fff" },
@@ -416,17 +669,56 @@ const styles = StyleSheet.create({
   topicPillTxt: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: "#fff" },
   diffPill: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 },
   diffPillTxt: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: "#fff" },
-  timerBadge: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5 },
-  timerTxt: { fontFamily: "Inter_700Bold", fontSize: 12 },
+  timerBadge: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5,
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  timerTxt: { fontFamily: "Inter_700Bold", fontSize: 12, color: "#fff" },
   progressTrack: { height: 8, backgroundColor: "rgba(255,255,255,0.25)", borderRadius: 4, overflow: "hidden" },
   progressFill: { height: "100%", backgroundColor: Colors.light.gold, borderRadius: 4 },
   quizScroll: { padding: 16 },
-  questionCard: { backgroundColor: Colors.light.cream, borderRadius: 20, padding: 20, borderWidth: 2, borderColor: "#F0E8D8", gap: 6 },
-  subtopicLabel: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: Colors.light.gold, textTransform: "uppercase", letterSpacing: 1 },
-  questionText: { fontFamily: "Inter_600SemiBold", fontSize: 17, color: Colors.light.navy, lineHeight: 27 },
+  questionCard: {
+    backgroundColor: Colors.light.cream, borderRadius: 20,
+    padding: 20, borderWidth: 2, borderColor: "#F0E8D8", gap: 6,
+  },
+  subtopicLabel: {
+    fontFamily: "Inter_600SemiBold", fontSize: 11,
+    color: Colors.light.gold, textTransform: "uppercase", letterSpacing: 1,
+  },
+  questionText: { fontFamily: "Inter_600SemiBold", fontSize: 19, color: Colors.light.navy, lineHeight: 30 },
   options: { gap: 10 },
-  optBtn: { flexDirection: "row", alignItems: "center", borderRadius: 16, padding: 14, borderWidth: 2, gap: 12 },
+  optBtn: {
+    flexDirection: "row", alignItems: "center",
+    borderRadius: 16, padding: 14, borderWidth: 2, gap: 12,
+  },
   optBadge: { width: 34, height: 34, borderRadius: 10, justifyContent: "center", alignItems: "center" },
   optBadgeTxt: { fontFamily: "Inter_700Bold", fontSize: 15, color: "#fff" },
-  optText: { flex: 1, fontFamily: "Inter_500Medium", fontSize: 15, lineHeight: 22 },
+  optText: { flex: 1, fontFamily: "Inter_500Medium", fontSize: 16, lineHeight: 24 },
+
+  // ── Explanation (corrections phase) ──
+  explanationCard: {
+    backgroundColor: Colors.light.goldLight ?? Colors.light.card,
+    borderRadius: 18, padding: 18, gap: 12,
+    borderWidth: 2, borderColor: Colors.light.gold + "30",
+  },
+  explanationHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  explanationTitle: {
+    flex: 1, fontFamily: "Inter_700Bold", fontSize: 15, color: Colors.light.navy,
+  },
+  explanationText: {
+    fontFamily: "Inter_400Regular", fontSize: 14,
+    color: Colors.light.text, lineHeight: 22,
+  },
+  listenBtn: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: "rgba(255,255,255,0.7)", borderRadius: 10,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderWidth: 1, borderColor: Colors.light.border,
+  },
+  listenBtnActive: {
+    backgroundColor: Colors.light.rust + "12",
+    borderColor: Colors.light.rust + "50",
+  },
+  listenBtnTxt: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: Colors.light.navy },
 });
