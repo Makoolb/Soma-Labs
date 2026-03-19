@@ -618,10 +618,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.2)",
     justifyContent: "center", alignItems: "center", marginBottom: 4,
   },
-  introTitle: { fontFamily: "Inter_700Bold", fontSize: 26, color: "#fff", textAlign: "center" },
+  introTitle: { fontFamily: "Inter_700Bold", fontSize: 28, color: "#fff", textAlign: "center" },
   introSub: {
-    fontFamily: "Inter_400Regular", fontSize: 15,
-    color: "rgba(255,255,255,0.8)", textAlign: "center", lineHeight: 22,
+    fontFamily: "Inter_400Regular", fontSize: 17,
+    color: "rgba(255,255,255,0.8)", textAlign: "center", lineHeight: 25,
   },
   introBody: {
     backgroundColor: Colors.light.background,
@@ -633,7 +633,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.card, borderRadius: 14,
     padding: 14, borderLeftWidth: 4,
   },
-  infoText: { fontFamily: "Inter_500Medium", fontSize: 14, color: Colors.light.text, flex: 1 },
+  infoText: { fontFamily: "Inter_500Medium", fontSize: 16, color: Colors.light.text, flex: 1 },
 
   // ── Buttons ──
   primaryBtn: {
@@ -685,17 +685,17 @@ const styles = StyleSheet.create({
   },
   quizBarTop: { flexDirection: "row", alignItems: "center", gap: 8 },
   qBadge: { backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 5 },
-  qBadgeTxt: { fontFamily: "Inter_700Bold", fontSize: 13, color: "#fff" },
+  qBadgeTxt: { fontFamily: "Inter_700Bold", fontSize: 15, color: "#fff" },
   topicPill: { flex: 1, backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 },
-  topicPillTxt: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: "#fff" },
+  topicPillTxt: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: "#fff" },
   diffPill: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 },
-  diffPillTxt: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: "#fff" },
+  diffPillTxt: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: "#fff" },
   timerBadge: {
     flexDirection: "row", alignItems: "center", gap: 4,
     borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5,
     backgroundColor: "rgba(255,255,255,0.2)",
   },
-  timerTxt: { fontFamily: "Inter_700Bold", fontSize: 12, color: "#fff" },
+  timerTxt: { fontFamily: "Inter_700Bold", fontSize: 14, color: "#fff" },
   progressTrack: { height: 8, backgroundColor: "rgba(255,255,255,0.25)", borderRadius: 4, overflow: "hidden" },
   progressFill: { height: "100%", backgroundColor: Colors.light.gold, borderRadius: 4 },
   quizScroll: { padding: 16 },
@@ -704,10 +704,10 @@ const styles = StyleSheet.create({
     padding: 20, borderWidth: 2, borderColor: "#F0E8D8", gap: 6,
   },
   subtopicLabel: {
-    fontFamily: "Inter_600SemiBold", fontSize: 11,
+    fontFamily: "Inter_600SemiBold", fontSize: 13,
     color: Colors.light.gold, textTransform: "uppercase", letterSpacing: 1,
   },
-  questionText: { fontFamily: "Inter_600SemiBold", fontSize: 19, color: Colors.light.navy, lineHeight: 30 },
+  questionText: { fontFamily: "Inter_600SemiBold", fontSize: 20, color: Colors.light.navy, lineHeight: 32 },
   options: { gap: 10 },
   optBtn: {
     flexDirection: "row", alignItems: "center",
@@ -715,7 +715,7 @@ const styles = StyleSheet.create({
   },
   optBadge: { width: 34, height: 34, borderRadius: 10, justifyContent: "center", alignItems: "center" },
   optBadgeTxt: { fontFamily: "Inter_700Bold", fontSize: 15, color: "#fff" },
-  optText: { flex: 1, fontFamily: "Inter_500Medium", fontSize: 16, lineHeight: 24 },
+  optText: { flex: 1, fontFamily: "Inter_500Medium", fontSize: 18, lineHeight: 26 },
 
   // ── Explanation (corrections phase) ──
   explanationCard: {
