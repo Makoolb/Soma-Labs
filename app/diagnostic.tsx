@@ -93,6 +93,7 @@ export default function DiagnosticScreen() {
   const [results, setResults] = useState<QuizResult[]>([]);
   const [correctionIdx, setCorrectionIdx] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [hasConfirmed, setHasConfirmed] = useState(false);
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const { formattedTime } = useElapsedTime();
@@ -138,15 +139,9 @@ export default function DiagnosticScreen() {
   // ─── QUIZ LOGIC ─────────────────────────────────────────────────────
 
   function handleSelect(idx: number) {
-    if (selected !== null) return;
+    if (hasConfirmed) return;
     Haptics.selectionAsync();
-    const q = questions[current];
-    const isCorrect = idx === q.correctIndex;
     setSelected(idx);
-    setResults((prev) => [
-      ...prev,
-      { questionIdx: current, topic: q.topic, correct: isCorrect, skipped: false, selectedIndex: idx },
-    ]);
   }
 
   function handleSkip() {
@@ -181,10 +176,11 @@ export default function DiagnosticScreen() {
   }
 
   function advanceQuestion() {
+    setHasConfirmed(false);
+    setSelected(null);
     Animated.timing(slideAnim, { toValue: -20, duration: 120, useNativeDriver: true }).start(() => {
       slideAnim.setValue(20);
       setCurrent((c) => c + 1);
-      setSelected(null);
       Animated.timing(slideAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
     });
   }
@@ -503,7 +499,7 @@ export default function DiagnosticScreen() {
   const q = questions[current];
   if (!q) return null;
 
-  const hasAnswered = selected !== null;
+  const isSelected = selected !== null;
   const progress = (current + 1) / questions.length;
 
   return (
@@ -556,9 +552,9 @@ export default function DiagnosticScreen() {
                 <TouchableOpacity
                   key={i}
                   style={[styles.optBtn, { backgroundColor: bg, borderColor }]}
-                  onPress={() => { if (!hasAnswered) handleSelect(i); }}
-                  disabled={hasAnswered}
-                  activeOpacity={hasAnswered ? 1 : 0.78}
+                  onPress={() => { if (!hasConfirmed) handleSelect(i); }}
+                  disabled={hasConfirmed}
+                  activeOpacity={hasConfirmed ? 1 : 0.78}
                 >
                   <View style={[styles.optBadge, { backgroundColor: Colors.light.optionB }]}>
                     <Text style={styles.optBadgeTxt}>{LETTER[i]}</Text>
@@ -573,8 +569,20 @@ export default function DiagnosticScreen() {
           </View>
 
           {/* Action */}
-          {hasAnswered ? (
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleNext}>
+          {isSelected ? (
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={() => {
+                if (selected === null) return;
+                const isCorrect = selected === q.correctIndex;
+                setResults((prev) => [
+                  ...prev,
+                  { questionIdx: current, topic: q.topic, correct: isCorrect, skipped: false, selectedIndex: selected },
+                ]);
+                setHasConfirmed(true);
+                handleNext();
+              }}
+            >
               <Text style={styles.primaryBtnText}>
                 {current + 1 >= questions.length ? "See My Results" : "Next Question"}
               </Text>
