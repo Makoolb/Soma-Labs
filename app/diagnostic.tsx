@@ -191,6 +191,36 @@ export default function DiagnosticScreen() {
 
   // ─── SPEECH ─────────────────────────────────────────────────────────
 
+  async function speakText(text: string, onDone?: () => void) {
+    try {
+      await Speech.stop();
+
+      const cleaned = text
+        .replace(/✓\s*/g, "Check: ")
+        .replace(/→/g, " gives ")
+        .replace(/÷/g, " divided by ")
+        .replace(/×/g, " times ")
+        .replace(/²/g, " squared")
+        .replace(/³/g, " cubed")
+        .replace(/√/g, " square root of ")
+        .replace(/₦/g, " naira ");
+
+      Speech.speak(cleaned, {
+        language: "en-GB",
+        rate: 0.88,
+        pitch: 1.0,
+        onDone,
+        onError: (err) => {
+          console.log("Speech error:", err);
+          onDone?.();
+        },
+      });
+    } catch (e) {
+      console.log("speakText failed:", e);
+      onDone?.();
+    }
+  }
+
   function handleListen(text: string) {
     if (isSpeaking) {
       Speech.stop();
@@ -198,24 +228,7 @@ export default function DiagnosticScreen() {
       return;
     }
     setIsSpeaking(true);
-
-    const trySpeak = (lang: string, fallbackLang?: string) => {
-      Speech.speak(text, {
-        language: lang,
-        rate: 0.88,
-        onDone: () => setIsSpeaking(false),
-        onStopped: () => setIsSpeaking(false),
-        onError: () => {
-          if (fallbackLang) {
-            trySpeak(fallbackLang);
-          } else {
-            setIsSpeaking(false);
-          }
-        },
-      });
-    };
-
-    trySpeak("en-NG", "en-GB");
+    speakText(text, () => setIsSpeaking(false));
   }
 
   // ─── INTRO ──────────────────────────────────────────────────────────
