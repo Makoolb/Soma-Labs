@@ -15,6 +15,6 @@ export default function Index() {
   }
 
   if (!isOnboarded) return <Redirect href="/onboarding" />;
-  if (!diagnosticDone) return <Redirect href="/diagnostic" />;
-  return <Redirect href="/(tabs)" />;
+  // Start preview from diagnostic page
+  return <Redirect href="/diagnostic" />;
 }
