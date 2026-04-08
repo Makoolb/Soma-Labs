@@ -1,13 +1,14 @@
 import type { Express } from "express";
 import { createServer, type Server } from "node:http";
 import OpenAI from "openai";
+import syncRoutes from "./syncRoutes";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
 
-const SYSTEM_PROMPT = `You are SomaBot, a friendly and encouraging AI tutor helping Nigerian primary school students (Primary 4–6) prepare for the Common Entrance Exam.
+const SYSTEM_PROMPT = `You are SabiBot, a friendly and encouraging AI tutor helping Nigerian primary school students (Primary 4–6) prepare for the Common Entrance Exam.
 
 Your role:
 - Generate age-appropriate questions in Maths and English
@@ -123,6 +124,8 @@ Return ONLY valid JSON: {"message": "your encouragement here"}`,
       res.status(500).json({ error: "Failed to generate encouragement" });
     }
   });
+
+  app.use("/api/me", syncRoutes);
 
   const httpServer = createServer(app);
   return httpServer;

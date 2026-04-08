@@ -4,7 +4,7 @@ import { View, ActivityIndicator } from "react-native";
 import Colors from "@/constants/colors";
 
 export default function Index() {
-  const { isOnboarded, diagnosticDone, isLoading } = useApp();
+  const { isOnboarded, diagnosticDone, isLoading, isSignedIn } = useApp();
 
   if (isLoading) {
     return (
@@ -14,7 +14,8 @@ export default function Index() {
     );
   }
 
+  if (!isSignedIn) return <Redirect href="/auth" />;
   if (!isOnboarded) return <Redirect href="/onboarding" />;
-  // Start preview from diagnostic page
-  return <Redirect href="/diagnostic" />;
+  if (!diagnosticDone) return <Redirect href="/diagnostic" />;
+  return <Redirect href="/(tabs)" />;
 }

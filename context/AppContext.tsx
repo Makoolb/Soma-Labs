@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { fetch } from "expo/fetch";
+import { getApiUrl } from "@/lib/query-client";
 
 export type Grade = "P4" | "P5" | "P6";
 export type Subject = "English" | "Maths" | "Both";
@@ -42,6 +44,7 @@ export type SkillMap = Record<string, number>;
 interface AppContextValue {
   profile: StudentProfile | null;
   isOnboarded: boolean;
+  isSignedIn: boolean;
   diagnosticDone: boolean;
   diagnosticResult: DiagnosticResult | null;
   skillMap: SkillMap | null;
@@ -111,7 +114,14 @@ function blendSkillMap(baseline: SkillMap, sessions: SessionResult[]): SkillMap 
   return blended;
 }
 
-export function AppProvider({ children }: { children: ReactNode }) {
+interface AppProviderProps {
+  children: ReactNode;
+  getToken: () => Promise<string | null>;
+  isSignedIn: boolean;
+  isAuthLoaded?: boolean;
+}
+
+export function AppProvider({ children, getToken, isSignedIn, isAuthLoaded = true }: AppProviderProps) {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResult | null>(null);
   const [skillMap, setSkillMap] = useState<SkillMap | null>(null);
@@ -120,9 +130,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<SessionResult[]>([]);
   const [streakDays, setStreakDays] = useState(0);
   const [totalXP, setTotalXP] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [storageLoading, setStorageLoading] = useState(true);
 
   const baselineRef = useRef<SkillMap | null>(null);
+  const hydratedRef = useRef(false);
+
+  const isLoading = storageLoading || !isAuthLoaded;
 
   useEffect(() => {
     baselineRef.current = baselineSkillMap;
@@ -131,6 +144,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (isSignedIn && !storageLoading && !hydratedRef.current) {
+      hydratedRef.current = true;
+      hydrateFromServer();
+    }
+  }, [isSignedIn, storageLoading]);
 
   async function load() {
     try {
@@ -152,7 +172,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setBaselineSkillMap(bsm);
         baselineRef.current = bsm;
       } else if (smStr) {
-        // Migrate: if no baseline stored yet but skillMap exists, treat it as the baseline
         const sm = JSON.parse(smStr);
         setBaselineSkillMap(sm);
         baselineRef.current = sm;
@@ -172,7 +191,107 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.error("Load failed:", e);
     } finally {
-      setIsLoading(false);
+      setStorageLoading(false);
+    }
+  }
+
+  async function buildHeaders(): Promise<Record<string, string> | null> {
+    try {
+      const token = await getToken();
+      if (!token) return null;
+      return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+    } catch {
+      return null;
+    }
+  }
+
+  function getBase(): string | null {
+    try { return getApiUrl(); } catch { return null; }
+  }
+
+  async function syncPut(path: string, body: object) {
+    try {
+      const base = getBase();
+      const headers = await buildHeaders();
+      if (!base || !headers) return;
+      await fetch(new URL(path, base).toString(), {
+        method: "PUT",
+        headers,
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      console.log(`Sync PUT ${path} failed:`, e);
+    }
+  }
+
+  async function syncPost(path: string, body: object) {
+    try {
+      const base = getBase();
+      const headers = await buildHeaders();
+      if (!base || !headers) return;
+      await fetch(new URL(path, base).toString(), {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      console.log(`Sync POST ${path} failed:`, e);
+    }
+  }
+
+  async function hydrateFromServer() {
+    try {
+      const base = getBase();
+      const token = await getToken();
+      if (!base || !token) return;
+
+      const res = await fetch(new URL("/api/me", base).toString(), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json() as any;
+
+      if (data.profile) {
+        const serverProfile = data.profile as StudentProfile;
+        setProfile(serverProfile);
+        await AsyncStorage.setItem(KEYS.PROFILE, JSON.stringify(serverProfile));
+      }
+      if (data.diagnosticResult) {
+        setDiagnosticResult(data.diagnosticResult);
+        await AsyncStorage.setItem(KEYS.DIAGNOSTIC, JSON.stringify(data.diagnosticResult));
+      }
+      if (data.skillMap && Object.keys(data.skillMap).length > 0) {
+        setSkillMap(data.skillMap);
+        await AsyncStorage.setItem(KEYS.SKILL_MAP, JSON.stringify(data.skillMap));
+      }
+      if (data.baselineSkillMap && Object.keys(data.baselineSkillMap).length > 0) {
+        setBaselineSkillMap(data.baselineSkillMap);
+        baselineRef.current = data.baselineSkillMap;
+        await AsyncStorage.setItem(KEYS.BASELINE_SKILL_MAP, JSON.stringify(data.baselineSkillMap));
+      }
+      if (Array.isArray(data.sessions) && data.sessions.length > 0) {
+        setSessions(data.sessions);
+        await AsyncStorage.setItem(KEYS.SESSIONS, JSON.stringify(data.sessions));
+      }
+      if (data.xp) {
+        setTotalXP(data.xp.totalXp ?? 0);
+        setStreakDays(data.xp.streakDays ?? 0);
+        await AsyncStorage.setItem(KEYS.XP, String(data.xp.totalXp ?? 0));
+        await AsyncStorage.setItem(KEYS.STREAK, String(data.xp.streakDays ?? 0));
+        if (data.xp.lastPracticeDate) {
+          await AsyncStorage.setItem(KEYS.LAST_PRACTICE, data.xp.lastPracticeDate);
+        }
+      }
+
+      // If server has no profile but we have local data, push it up
+      if (!data.profile) {
+        const localProfile = profile;
+        if (localProfile) {
+          syncPut("/api/me/profile", localProfile);
+        }
+      }
+    } catch (e) {
+      console.log("Hydration from server failed:", e);
     }
   }
 
@@ -180,6 +299,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const withDate: StudentProfile = { ...p, createdAt: p.createdAt ?? new Date().toISOString() };
     setProfile(withDate);
     await AsyncStorage.setItem(KEYS.PROFILE, JSON.stringify(withDate));
+    syncPut("/api/me/profile", withDate);
   }
 
   async function updateExamDate(date: string | null) {
@@ -189,17 +309,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       : { name: profile.name, grade: profile.grade, subject: profile.subject };
     setProfile(updated);
     await AsyncStorage.setItem(KEYS.PROFILE, JSON.stringify(updated));
+    syncPut("/api/me/profile", updated);
   }
 
   async function saveDiagnosticResult(result: DiagnosticResult) {
     setDiagnosticResult(result);
     await AsyncStorage.setItem(KEYS.DIAGNOSTIC, JSON.stringify(result));
+    syncPut("/api/me/diagnostic", { diagnosticResult: result });
   }
 
-  /**
-   * Called once at diagnostic completion. Stores the map both as the live skillMap
-   * and as the immutable baseline.
-   */
   async function saveSkillMap(map: SkillMap) {
     setSkillMap(map);
     setBaselineSkillMap(map);
@@ -209,6 +327,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       AsyncStorage.setItem(KEYS.SKILL_MAP, JSON.stringify(map)),
       AsyncStorage.setItem(KEYS.BASELINE_SKILL_MAP, JSON.stringify(map)),
     ]);
+    syncPut("/api/me/skillmap", { skillMap: map, baselineSkillMap: map });
   }
 
   function dismissSkillMapReady() {
@@ -231,8 +350,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const last = await AsyncStorage.getItem(KEYS.LAST_PRACTICE);
     const lastDate = last ? new Date(last).toDateString() : null;
 
+    let newStreak = streakDays;
     if (lastDate !== today) {
-      const newStreak = lastDate === yesterday ? streakDays + 1 : 1;
+      newStreak = lastDate === yesterday ? streakDays + 1 : 1;
       setStreakDays(newStreak);
       await AsyncStorage.setItem(KEYS.STREAK, String(newStreak));
       await AsyncStorage.setItem(KEYS.LAST_PRACTICE, new Date().toISOString());
@@ -242,7 +362,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const updated = [full, ...prev].slice(0, 100);
       AsyncStorage.setItem(KEYS.SESSIONS, JSON.stringify(updated));
 
-      // Blend the live skillMap with the new session data (no skillMapReady ping)
       const baseline = baselineRef.current;
       if (baseline) {
         const blended = blendSkillMap(baseline, updated);
@@ -251,6 +370,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       return updated;
+    });
+
+    syncPost("/api/me/sessions", { ...full, xpEarned: xpGained });
+    syncPut("/api/me/xp", {
+      totalXp: totalXP + xpGained,
+      streakDays: newStreak,
+      lastPracticeDate: new Date().toISOString(),
     });
   }
 
@@ -265,12 +391,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSessions([]);
     setStreakDays(0);
     setTotalXP(0);
+    hydratedRef.current = false;
   }
 
   const value = useMemo(
     () => ({
       profile,
       isOnboarded: !!profile,
+      isSignedIn,
       diagnosticDone: !!diagnosticResult,
       diagnosticResult,
       skillMap,
@@ -287,7 +415,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addSession,
       resetAll,
     }),
-    [profile, diagnosticResult, skillMap, skillMapReady, sessions, streakDays, totalXP, isLoading]
+    [profile, isSignedIn, diagnosticResult, skillMap, skillMapReady, sessions, streakDays, totalXP, isLoading]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
