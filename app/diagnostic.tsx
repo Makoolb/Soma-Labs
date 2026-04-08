@@ -46,6 +46,7 @@ type Phase = "intro" | "quiz" | "summary" | "corrections";
 
 const LETTER = ["A", "B", "C", "D"];
 const SESSION_SIZE = 20;
+const MAX_SKIPS = 5;
 
 // ─── QUESTION PICKER ─────────────────────────────────────────────────────────
 
@@ -94,6 +95,7 @@ export default function DiagnosticScreen() {
   const [correctionIdx, setCorrectionIdx] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [hasConfirmed, setHasConfirmed] = useState(false);
+  const [skipCount, setSkipCount] = useState(0);
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const { formattedTime } = useElapsedTime();
@@ -145,10 +147,12 @@ export default function DiagnosticScreen() {
   }
 
   function handleSkip() {
+    if (skipCount >= MAX_SKIPS) return;
     Haptics.selectionAsync();
     const q = questions[current];
     const isLast = current + 1 >= questions.length;
 
+    setSkipCount((c) => c + 1);
     setResults((prev) => {
       const updated: QuizResult[] = [
         ...prev,
@@ -592,10 +596,18 @@ export default function DiagnosticScreen() {
                 color="#fff"
               />
             </TouchableOpacity>
+          ) : skipCount >= MAX_SKIPS ? (
+            <View style={[styles.skipBtn, styles.skipBtnDisabled]}>
+              <Ionicons name="ban" size={16} color={Colors.light.border} />
+              <Text style={[styles.skipBtnText, styles.skipBtnTextDisabled]}>No skips left</Text>
+            </View>
           ) : (
             <TouchableOpacity style={styles.skipBtn} onPress={handleSkip}>
               <Ionicons name="arrow-forward" size={16} color={Colors.light.textSecondary} />
-              <Text style={styles.skipBtnText}>Skip this question</Text>
+              <Text style={styles.skipBtnText}>
+                Skip{" "}
+                <Text style={styles.skipCountTxt}>({MAX_SKIPS - skipCount} left)</Text>
+              </Text>
             </TouchableOpacity>
           )}
         </Animated.View>
@@ -648,7 +660,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.card, borderRadius: 18, paddingVertical: 16,
     borderWidth: 2, borderColor: Colors.light.border,
   },
+  skipBtnDisabled: { backgroundColor: Colors.light.background, borderColor: Colors.light.border, opacity: 0.55 },
   skipBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: Colors.light.textSecondary },
+  skipBtnTextDisabled: { color: Colors.light.border },
+  skipCountTxt: { fontFamily: "Inter_500Medium", fontSize: 13, color: Colors.light.gold },
   reviewBtn: {
     flexDirection: "row", alignItems: "center", gap: 14,
     backgroundColor: Colors.light.navy, borderRadius: 18, padding: 18,
