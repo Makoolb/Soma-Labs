@@ -136,7 +136,7 @@ export default function ParentDashboard() {
     const name = profile?.name ?? "Your child";
     const grade = profile?.grade ?? "";
     const lines: string[] = [
-      `📊 *SomaLabs Weekly Report*`,
+      `📊 *SabiLab Weekly Report*`,
       `${name} — Primary ${grade.replace("P", "")}`,
       ``,
       `🎯 Level: ${level} (${totalXP} XP)`,

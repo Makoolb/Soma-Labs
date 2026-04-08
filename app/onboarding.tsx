@@ -88,7 +88,7 @@ export default function OnboardingScreen() {
     : "calendar";
 
   const headerTitle =
-    step === 0 ? "SomaLabs"
+    step === 0 ? "SabiLab"
     : step === 1 ? "Your Name"
     : step === 2 ? "Your Class"
     : step === 3 ? "Your Subject"
@@ -138,7 +138,7 @@ export default function OnboardingScreen() {
           {step === 0 && (
             <>
               <Text style={styles.bodyText}>
-                SomaLabs gives Nigerian Primary 4–6 students daily Maths and English practice tailored to the Common Entrance Exam. Set up in just 4 steps!
+                SabiLab gives Nigerian Primary 4–6 students daily Maths and English practice tailored to the Common Entrance Exam. Set up in just 4 steps!
               </Text>
               <View style={styles.featureList}>
                 {[
