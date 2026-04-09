@@ -11,11 +11,13 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
+import { View, Text, StyleSheet } from "react-native";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { AppProvider } from "@/context/AppContext";
 import { ClerkProvider, useAuth } from "@clerk/clerk-expo";
 import * as SecureStore from "expo-secure-store";
+import Colors from "@/constants/colors";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -60,17 +62,64 @@ function AppContent() {
 }
 
 function ClerkAuthRoot() {
-  const { getToken, isSignedIn, isLoaded } = useAuth();
+  const { getToken, isSignedIn, isLoaded, userId } = useAuth();
   return (
     <AppProvider
       getToken={getToken}
       isSignedIn={isSignedIn ?? false}
       isAuthLoaded={isLoaded}
+      userId={userId ?? null}
     >
       <AppContent />
     </AppProvider>
   );
 }
+
+function ConfigurationRequiredScreen() {
+  return (
+    <View style={cfgStyles.container}>
+      <View style={cfgStyles.iconWrap}>
+        <Text style={cfgStyles.icon}>⚙</Text>
+      </View>
+      <Text style={cfgStyles.title}>Auth not configured</Text>
+      <Text style={cfgStyles.body}>
+        Set{" "}
+        <Text style={cfgStyles.code}>EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY</Text>
+        {" "}in Replit Secrets to enable sign-in.
+      </Text>
+    </View>
+  );
+}
+
+const cfgStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.light.navy,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
+  },
+  iconWrap: { marginBottom: 20 },
+  icon: { fontSize: 48 },
+  title: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 22,
+    color: "#fff",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  body: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 15,
+    color: "rgba(255,255,255,0.75)",
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  code: {
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.light.gold,
+  },
+});
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -91,11 +140,7 @@ export default function RootLayout() {
   if (!PUBLISHABLE_KEY) {
     return (
       <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <AppProvider getToken={async () => null} isSignedIn={true} isAuthLoaded={true}>
-            <AppContent />
-          </AppProvider>
-        </QueryClientProvider>
+        <ConfigurationRequiredScreen />
       </ErrorBoundary>
     );
   }

@@ -19,9 +19,24 @@ import Colors from "@/constants/colors";
 type AuthMethod = "phone" | "google" | "apple";
 type PhoneStep = "enter" | "verify";
 
-const COUNTRY_CODES = [
-  { code: "+234", flag: "NG", label: "Nigeria (+234)" },
-  { code: "+1", flag: "US", label: "United States (+1)" },
+type ClerkError = { code?: string; longMessage?: string; message?: string };
+type ClerkErrorResponse = { errors?: ClerkError[] };
+
+type PhoneCodeFactor = { strategy: "phone_code"; phoneNumberId: string };
+
+function extractErrorMessage(err: unknown): string {
+  const e = err as ClerkErrorResponse;
+  return e?.errors?.[0]?.longMessage ?? e?.errors?.[0]?.message ?? "Something went wrong. Please try again.";
+}
+
+function extractErrorCode(err: unknown): string {
+  const e = err as ClerkErrorResponse;
+  return e?.errors?.[0]?.code ?? "";
+}
+
+const COUNTRY_CODES: { code: string; label: string }[] = [
+  { code: "+234", label: "Nigeria (+234)" },
+  { code: "+1", label: "United States (+1)" },
 ];
 
 export default function AuthScreen() {
@@ -43,8 +58,8 @@ export default function AuthScreen() {
   const [error, setError] = useState<string | null>(null);
   const [pendingVerification, setPendingVerification] = useState<"signIn" | "signUp" | null>(null);
 
-  const country = COUNTRY_CODES[countryIdx];
-  const fullPhone = (country?.code ?? "+234") + phone.trim().replace(/^0+/, "");
+  const country = COUNTRY_CODES[countryIdx] ?? COUNTRY_CODES[0];
+  const fullPhone = country.code + phone.trim().replace(/^0+/, "");
 
   function switchMethod(m: AuthMethod) {
     Haptics.selectionAsync();
@@ -61,26 +76,28 @@ export default function AuthScreen() {
     try {
       const attempt = await signIn!.create({ identifier: fullPhone });
       const factor = attempt.supportedFirstFactors?.find(
-        (f: any) => f.strategy === "phone_code"
-      ) as any;
-      if (factor?.phoneNumberId) {
+        (f) => f.strategy === "phone_code"
+      ) as PhoneCodeFactor | undefined;
+      if (factor) {
         await signIn!.prepareFirstFactor({ strategy: "phone_code", phoneNumberId: factor.phoneNumberId });
         setPendingVerification("signIn");
         setPhoneStep("verify");
+      } else {
+        setError("Phone sign-in is not available. Please use Google or Apple.");
       }
-    } catch (signInErr: any) {
-      const code = signInErr?.errors?.[0]?.code ?? "";
-      if (code === "form_identifier_not_found" || code === "form_identifier_exists") {
+    } catch (signInErr: unknown) {
+      const errCode = extractErrorCode(signInErr);
+      if (errCode === "form_identifier_not_found" || errCode === "form_identifier_exists") {
         try {
           await signUp!.create({ phoneNumber: fullPhone });
           await signUp!.preparePhoneNumberVerification({ strategy: "phone_code" });
           setPendingVerification("signUp");
           setPhoneStep("verify");
-        } catch (signUpErr: any) {
-          setError(signUpErr?.errors?.[0]?.longMessage ?? "Could not send code. Please try again.");
+        } catch (signUpErr: unknown) {
+          setError(extractErrorMessage(signUpErr));
         }
       } else {
-        setError(signInErr?.errors?.[0]?.longMessage ?? "Could not send code. Please try again.");
+        setError(extractErrorMessage(signInErr));
       }
     } finally {
       setLoading(false);
@@ -105,8 +122,8 @@ export default function AuthScreen() {
           router.replace("/");
         }
       }
-    } catch (err: any) {
-      setError(err?.errors?.[0]?.longMessage ?? "Invalid code. Please try again.");
+    } catch (err: unknown) {
+      setError(extractErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -177,7 +194,7 @@ export default function AuthScreen() {
               activeOpacity={0.8}
             >
               <Ionicons
-                name={tab.icon as any}
+                name={tab.icon as React.ComponentProps<typeof Ionicons>["name"]}
                 size={15}
                 color={method === tab.id ? "#fff" : Colors.light.textSecondary}
               />
@@ -196,22 +213,25 @@ export default function AuthScreen() {
           </View>
         ) : null}
 
-        {/* ── Phone Flow ── */}
+        {/* ── Phone: enter number ── */}
         {method === "phone" && phoneStep === "enter" && (
           <View style={styles.form}>
             <Text style={styles.fieldLabel}>Phone Number</Text>
             <View style={styles.phoneRow}>
               <TouchableOpacity
                 style={styles.countryBtn}
-                onPress={() => { Haptics.selectionAsync(); setCountryIdx((i) => (i + 1) % COUNTRY_CODES.length); }}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setCountryIdx((i) => (i + 1) % COUNTRY_CODES.length);
+                }}
               >
-                <Text style={styles.countryCode}>{country?.code}</Text>
+                <Text style={styles.countryCode}>{country.code}</Text>
                 <Ionicons name="chevron-down" size={12} color={Colors.light.textSecondary} />
               </TouchableOpacity>
               <TextInput
                 style={styles.phoneInput}
                 placeholder="8012345678"
-                placeholderTextColor={Colors.light.textTertiary ?? Colors.light.textSecondary}
+                placeholderTextColor={Colors.light.textTertiary}
                 keyboardType="phone-pad"
                 value={phone}
                 onChangeText={setPhone}
@@ -219,9 +239,7 @@ export default function AuthScreen() {
                 autoFocus
               />
             </View>
-            <Text style={styles.hint}>
-              {country?.label} — we'll send a 6-digit code to this number
-            </Text>
+            <Text style={styles.hint}>{country.label} — we'll send a 6-digit code</Text>
             <TouchableOpacity
               style={[styles.primaryBtn, (!phone.trim() || loading) && styles.btnDisabled]}
               onPress={handleSendCode}
@@ -235,6 +253,7 @@ export default function AuthScreen() {
           </View>
         )}
 
+        {/* ── Phone: verify code ── */}
         {method === "phone" && phoneStep === "verify" && (
           <View style={styles.form}>
             <TouchableOpacity style={styles.backRow} onPress={() => { setPhoneStep("enter"); setCode(""); setError(null); }}>
@@ -246,7 +265,7 @@ export default function AuthScreen() {
             <TextInput
               style={[styles.phoneInput, styles.codeInput]}
               placeholder="000000"
-              placeholderTextColor={Colors.light.textTertiary ?? Colors.light.textSecondary}
+              placeholderTextColor={Colors.light.textTertiary}
               keyboardType="number-pad"
               value={code}
               onChangeText={(t) => setCode(t.replace(/\D/g, "").slice(0, 6))}
@@ -286,7 +305,7 @@ export default function AuthScreen() {
           </View>
         )}
 
-        {/* ── Apple ── */}
+        {/* ── Apple (iOS only) ── */}
         {method === "apple" && Platform.OS === "ios" && (
           <View style={styles.form}>
             <Text style={styles.hint}>Use your Apple ID to sign in or create a SabiLab account</Text>
