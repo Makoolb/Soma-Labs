@@ -10,19 +10,16 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useSignIn, useSignUp, useOAuth } from "@clerk/clerk-expo";
+import { useOAuth } from "@clerk/clerk-expo";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 
 type AuthMode = "select" | "signup" | "signin";
-type SignupStep = "profile" | "method";
-type PhoneStep = "enter" | "verify";
 
 type ClerkError = { code?: string; longMessage?: string; message?: string };
 type ClerkErrorResponse = { errors?: ClerkError[] };
-type PhoneCodeFactor = { strategy: "phone_code"; phoneNumberId: string };
 
 const GRADES = ["P4", "P5", "P6"] as const;
 type Grade = typeof GRADES[number];
@@ -32,59 +29,35 @@ function extractErrorMessage(err: unknown): string {
   return e?.errors?.[0]?.longMessage ?? e?.errors?.[0]?.message ?? "Something went wrong. Please try again.";
 }
 
-const COUNTRY_CODES: { code: string; label: string }[] = [
-  { code: "+234", label: "Nigeria (+234)" },
-  { code: "+1", label: "United States (+1)" },
-];
-
-type AuthMethod = "phone" | "google" | "apple";
-
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const { signIn, isLoaded: signInLoaded, setActive: setSignInActive } = useSignIn();
-  const { signUp, isLoaded: signUpLoaded, setActive: setSignUpActive } = useSignUp();
   const { startOAuthFlow: startGoogle } = useOAuth({ strategy: "oauth_google" });
   const { startOAuthFlow: startApple } = useOAuth({ strategy: "oauth_apple" });
 
   // ── Navigation state ───────────────────────────────────────────────────────
   const [authMode, setAuthMode] = useState<AuthMode>("select");
-  // Signup flows through "profile" (name + grade) THEN "method" (auth choice)
-  const [signupStep, setSignupStep] = useState<SignupStep>("profile");
-  const [method, setMethod] = useState<AuthMethod>("phone");
-  const [phoneStep, setPhoneStep] = useState<PhoneStep>("enter");
+  // Signup flows through "profile" (name + grade) THEN oauth buttons
+  const [signupStep, setSignupStep] = useState<"profile" | "oauth">("profile");
 
   // ── Sign-up profile fields (collected BEFORE auth) ─────────────────────────
   const [newUserName, setNewUserName] = useState("");
   const [newUserGrade, setNewUserGrade] = useState<Grade | null>(null);
 
-  // ── Phone auth ─────────────────────────────────────────────────────────────
-  const [countryIdx, setCountryIdx] = useState(0);
-  const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const country = COUNTRY_CODES[countryIdx] ?? COUNTRY_CODES[0];
-  const fullPhone = country.code + phone.trim().replace(/^0+/, "");
 
   // ── Navigation helpers ─────────────────────────────────────────────────────
   function goBack() {
     Haptics.selectionAsync();
     setError(null);
-    if (phoneStep === "verify") {
-      setPhoneStep("enter");
-      setCode("");
-    } else if (authMode === "signup" && signupStep === "method") {
+    if (authMode === "signup" && signupStep === "oauth") {
       setSignupStep("profile");
-      setPhoneStep("enter");
     } else {
       setAuthMode("select");
       setSignupStep("profile");
-      setPhoneStep("enter");
     }
   }
 
@@ -92,75 +65,6 @@ export default function AuthScreen() {
     Haptics.selectionAsync();
     setAuthMode(mode);
     setError(null);
-  }
-
-  function switchMethod(m: AuthMethod) {
-    Haptics.selectionAsync();
-    setMethod(m);
-    setError(null);
-    setPhoneStep("enter");
-    setCode("");
-  }
-
-  // ── Phone send code ────────────────────────────────────────────────────────
-  async function handleSendCode() {
-    if (!phone.trim() || !signInLoaded || !signUpLoaded) return;
-    setLoading(true);
-    setError(null);
-    try {
-      if (authMode === "signin") {
-        const attempt = await signIn!.create({ identifier: fullPhone });
-        const factor = attempt.supportedFirstFactors?.find(
-          (f) => f.strategy === "phone_code"
-        ) as PhoneCodeFactor | undefined;
-        if (factor) {
-          await signIn!.prepareFirstFactor({ strategy: "phone_code", phoneNumberId: factor.phoneNumberId });
-          setPhoneStep("verify");
-        } else {
-          setError("Phone sign-in is not available. Please use Google or Apple.");
-        }
-      } else {
-        await signUp!.create({ phoneNumber: fullPhone });
-        await signUp!.preparePhoneNumberVerification({ strategy: "phone_code" });
-        setPhoneStep("verify");
-      }
-    } catch (err: unknown) {
-      setError(extractErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // ── Phone verify code ──────────────────────────────────────────────────────
-  async function handleVerifyCode() {
-    if (code.length < 6) return;
-    setLoading(true);
-    setError(null);
-    try {
-      if (authMode === "signin") {
-        const result = await signIn!.attemptFirstFactor({ strategy: "phone_code", code });
-        if (result.status === "complete") {
-          await setSignInActive!({ session: result.createdSessionId });
-          router.replace("/");
-        }
-      } else {
-        const result = await signUp!.attemptPhoneNumberVerification({ code });
-        if (result.status === "complete" && result.createdSessionId) {
-          // Activate session FIRST — profile is NOT saved here.
-          // Onboarding receives name+grade via URL params and calls saveProfile()
-          // so that isOnboarded only becomes true after the onboarding screen runs.
-          await setSignUpActive!({ session: result.createdSessionId });
-          router.replace({
-            pathname: "/onboarding",
-            params: { name: newUserName.trim(), grade: newUserGrade! },
-          });
-        }
-      }
-    } catch (err: unknown) {
-      setError(extractErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
   }
 
   // ── OAuth ──────────────────────────────────────────────────────────────────
@@ -172,7 +76,6 @@ export default function AuthScreen() {
       if (createdSessionId && setActive) {
         await setActive({ session: createdSessionId });
         if (authMode === "signup") {
-          // New sign-up: route through onboarding so profile is saved there.
           router.replace({
             pathname: "/onboarding",
             params: { name: newUserName.trim(), grade: newUserGrade! },
@@ -196,7 +99,6 @@ export default function AuthScreen() {
       if (createdSessionId && setActive) {
         await setActive({ session: createdSessionId });
         if (authMode === "signup") {
-          // New sign-up: route through onboarding so profile is saved there.
           router.replace({
             pathname: "/onboarding",
             params: { name: newUserName.trim(), grade: newUserGrade! },
@@ -212,24 +114,12 @@ export default function AuthScreen() {
     }
   }
 
-  const tabs: { id: AuthMethod; label: string; icon: string }[] = [
-    { id: "phone", label: "Phone", icon: "call-outline" },
-    { id: "google", label: "Google", icon: "logo-google" },
-    ...(Platform.OS === "ios" ? [{ id: "apple" as AuthMethod, label: "Apple", icon: "logo-apple" }] : []),
-  ];
-
   const isProfileComplete = newUserName.trim().length > 0 && newUserGrade !== null;
 
   // ── Shared card header (back button) ──────────────────────────────────────
   const showBack = authMode !== "select";
   const backLabel =
-    authMode === "signup" && signupStep === "method" && phoneStep === "verify"
-      ? "Back"
-      : authMode === "signup" && signupStep === "method"
-        ? "Your Details"
-        : authMode === "signup"
-          ? "Back"
-          : "Back";
+    authMode === "signup" && signupStep === "oauth" ? "Your Details" : "Back";
 
   return (
     <ScrollView
@@ -304,7 +194,7 @@ export default function AuthScreen() {
           <View style={styles.form}>
             <Text style={styles.fieldLabel}>Your Name</Text>
             <TextInput
-              style={styles.phoneInput}
+              style={styles.textInput}
               placeholder="e.g. Emeka Chukwu"
               placeholderTextColor={Colors.light.textTertiary}
               value={newUserName}
@@ -331,7 +221,7 @@ export default function AuthScreen() {
             <Text style={styles.hint}>You can update these later from the Parent Dashboard</Text>
             <TouchableOpacity
               style={[styles.primaryBtn, !isProfileComplete && styles.btnDisabled]}
-              onPress={() => { Haptics.selectionAsync(); setSignupStep("method"); setError(null); }}
+              onPress={() => { Haptics.selectionAsync(); setSignupStep("oauth"); setError(null); }}
               disabled={!isProfileComplete}
               testID="auth-profile-continue"
             >
@@ -341,135 +231,27 @@ export default function AuthScreen() {
           </View>
         )}
 
-        {/* ── Auth method tabs (signup method step OR signin) ── */}
-        {(authMode === "signin" || (authMode === "signup" && signupStep === "method")) && (
-          <View style={styles.tabs}>
-            {tabs.map((tab) => (
-              <TouchableOpacity
-                key={tab.id}
-                style={[styles.tab, method === tab.id && styles.tabActive]}
-                onPress={() => switchMethod(tab.id)}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name={tab.icon as React.ComponentProps<typeof Ionicons>["name"]}
-                  size={15}
-                  color={method === tab.id ? "#fff" : Colors.light.textSecondary}
-                />
-                <Text style={[styles.tabTxt, method === tab.id && styles.tabTxtActive]}>
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+        {/* ── OAuth buttons (signup oauth step OR signin) ── */}
+        {(authMode === "signin" || (authMode === "signup" && signupStep === "oauth")) && (
+          <View style={styles.form}>
+            <Text style={styles.hint}>
+              {authMode === "signup"
+                ? "Use your Google account to create a SabiLab account"
+                : "Use your Google account to sign in"}
+            </Text>
+            <TouchableOpacity
+              style={[styles.socialBtn, loading && styles.btnDisabled]}
+              onPress={handleGoogleAuth}
+              disabled={loading}
+              testID="auth-google-btn"
+            >
+              {loading
+                ? <ActivityIndicator color={Colors.light.navy} />
+                : <><Ionicons name="logo-google" size={20} color="#EA4335" /><Text style={styles.socialBtnTxt}>Continue with Google</Text></>
+              }
+            </TouchableOpacity>
 
-        {/* ── Phone: enter number ── */}
-        {(authMode === "signin" || (authMode === "signup" && signupStep === "method")) &&
-          method === "phone" && phoneStep === "enter" && (
-            <View style={styles.form}>
-              <Text style={styles.fieldLabel}>Phone Number</Text>
-              <View style={styles.phoneRow}>
-                <TouchableOpacity
-                  style={styles.countryBtn}
-                  onPress={() => { Haptics.selectionAsync(); setCountryIdx((i) => (i + 1) % COUNTRY_CODES.length); }}
-                >
-                  <Text style={styles.countryCode}>{country.code}</Text>
-                  <Ionicons name="chevron-down" size={12} color={Colors.light.textSecondary} />
-                </TouchableOpacity>
-                <TextInput
-                  style={styles.phoneInput}
-                  placeholder="8012345678"
-                  placeholderTextColor={Colors.light.textTertiary}
-                  keyboardType="phone-pad"
-                  value={phone}
-                  onChangeText={setPhone}
-                  maxLength={15}
-                  autoFocus
-                  testID="auth-phone-input"
-                />
-              </View>
-              <Text style={styles.hint}>{country.label} — we'll send a 6-digit code</Text>
-              <TouchableOpacity
-                style={[styles.primaryBtn, (!phone.trim() || loading) && styles.btnDisabled]}
-                onPress={handleSendCode}
-                disabled={!phone.trim() || loading}
-                testID="auth-send-code-btn"
-              >
-                {loading
-                  ? <ActivityIndicator color="#fff" />
-                  : <><Text style={styles.primaryBtnTxt}>Send Code</Text><Ionicons name="arrow-forward" size={18} color="#fff" /></>
-                }
-              </TouchableOpacity>
-            </View>
-          )}
-
-        {/* ── Phone: verify code ── */}
-        {(authMode === "signin" || (authMode === "signup" && signupStep === "method")) &&
-          method === "phone" && phoneStep === "verify" && (
-            <View style={styles.form}>
-              <Text style={styles.fieldLabel}>Enter the 6-digit code</Text>
-              <Text style={styles.hint}>Sent to {fullPhone}</Text>
-              <TextInput
-                style={[styles.phoneInput, styles.codeInput]}
-                placeholder="000000"
-                placeholderTextColor={Colors.light.textTertiary}
-                keyboardType="number-pad"
-                value={code}
-                onChangeText={(t) => setCode(t.replace(/\D/g, "").slice(0, 6))}
-                maxLength={6}
-                autoFocus
-                testID="auth-code-input"
-              />
-              <TouchableOpacity
-                style={[styles.primaryBtn, (code.length < 6 || loading) && styles.btnDisabled]}
-                onPress={handleVerifyCode}
-                disabled={code.length < 6 || loading}
-                testID="auth-verify-btn"
-              >
-                {loading
-                  ? <ActivityIndicator color="#fff" />
-                  : <><Text style={styles.primaryBtnTxt}>Verify Code</Text><Ionicons name="checkmark" size={18} color="#fff" /></>
-                }
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.resendBtn} onPress={handleSendCode} disabled={loading}>
-                <Text style={styles.resendTxt}>Resend code</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-        {/* ── Google ── */}
-        {(authMode === "signin" || (authMode === "signup" && signupStep === "method")) &&
-          method === "google" && (
-            <View style={styles.form}>
-              <Text style={styles.hint}>
-                {authMode === "signup"
-                  ? "Use your Google account to create a SabiLab account"
-                  : "Use your Google account to sign in"}
-              </Text>
-              <TouchableOpacity
-                style={[styles.socialBtn, loading && styles.btnDisabled]}
-                onPress={handleGoogleAuth}
-                disabled={loading}
-                testID="auth-google-btn"
-              >
-                {loading
-                  ? <ActivityIndicator color={Colors.light.navy} />
-                  : <><Ionicons name="logo-google" size={20} color="#EA4335" /><Text style={styles.socialBtnTxt}>Continue with Google</Text></>
-                }
-              </TouchableOpacity>
-            </View>
-          )}
-
-        {/* ── Apple (iOS only) ── */}
-        {(authMode === "signin" || (authMode === "signup" && signupStep === "method")) &&
-          method === "apple" && Platform.OS === "ios" && (
-            <View style={styles.form}>
-              <Text style={styles.hint}>
-                {authMode === "signup"
-                  ? "Use your Apple ID to create a SabiLab account"
-                  : "Use your Apple ID to sign in"}
-              </Text>
+            {Platform.OS === "ios" && (
               <TouchableOpacity
                 style={[styles.appleBtn, loading && styles.btnDisabled]}
                 onPress={handleAppleAuth}
@@ -481,8 +263,9 @@ export default function AuthScreen() {
                   : <><Ionicons name="logo-apple" size={20} color="#fff" /><Text style={styles.appleBtnTxt}>Sign in with Apple</Text></>
                 }
               </TouchableOpacity>
-            </View>
-          )}
+            )}
+          </View>
+        )}
       </View>
 
       <Text style={styles.footer}>
@@ -512,7 +295,6 @@ const styles = StyleSheet.create({
   backRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   backTxt: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: Colors.light.navy },
 
-  // Mode selection
   modeBtn: {
     flexDirection: "row", alignItems: "center", gap: 12,
     backgroundColor: Colors.light.card,
@@ -527,15 +309,6 @@ const styles = StyleSheet.create({
   modeBtnText: { flex: 1, gap: 2 },
   modeBtnTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: Colors.light.navy },
   modeBtnSub: { fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary, lineHeight: 18 },
-
-  tabs: { flexDirection: "row", backgroundColor: Colors.light.card, borderRadius: 14, padding: 4, gap: 4 },
-  tab: {
-    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
-    borderRadius: 10, paddingVertical: 10,
-  },
-  tabActive: { backgroundColor: Colors.light.navy },
-  tabTxt: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: Colors.light.textSecondary },
-  tabTxtActive: { color: "#fff" },
 
   errorCard: {
     flexDirection: "row", alignItems: "flex-start", gap: 8,
@@ -556,55 +329,39 @@ const styles = StyleSheet.create({
     justifyContent: "center", alignItems: "center",
   },
   gradeBtnActive: { backgroundColor: Colors.light.navy, borderColor: Colors.light.navy },
-  gradeBtnTxt: { fontFamily: "Inter_700Bold", fontSize: 18, color: Colors.light.textSecondary },
+  gradeBtnTxt: { fontFamily: "Inter_700Bold", fontSize: 16, color: Colors.light.textSecondary },
   gradeBtnTxtActive: { color: "#fff" },
 
-  phoneRow: { flexDirection: "row", gap: 8 },
-  countryBtn: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    backgroundColor: Colors.light.card, borderRadius: 14,
-    paddingHorizontal: 12, paddingVertical: 16,
-    borderWidth: 2, borderColor: Colors.light.border,
-  },
-  countryCode: { fontFamily: "Inter_700Bold", fontSize: 15, color: Colors.light.navy },
-  phoneInput: {
-    flex: 1, height: 56,
+  textInput: {
+    borderWidth: 1.5, borderColor: Colors.light.border,
+    borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14,
+    fontFamily: "Inter_400Regular", fontSize: 16, color: Colors.light.text,
     backgroundColor: Colors.light.card,
-    borderRadius: 14, paddingHorizontal: 16,
-    fontFamily: "Inter_500Medium", fontSize: 17,
-    color: Colors.light.navy,
-    borderWidth: 2, borderColor: Colors.light.border,
   },
-  codeInput: { flex: 0, textAlign: "center", letterSpacing: 10, fontSize: 22 },
 
   primaryBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
-    backgroundColor: Colors.light.gold, borderRadius: 16, paddingVertical: 18,
-    shadowColor: Colors.light.gold,
-    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: Colors.light.navy, borderRadius: 16, paddingVertical: 16,
   },
   primaryBtnTxt: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#fff" },
   btnDisabled: { opacity: 0.45 },
 
   socialBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12,
-    backgroundColor: Colors.light.card, borderRadius: 16, paddingVertical: 18,
-    borderWidth: 2, borderColor: Colors.light.border,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
+    borderWidth: 1.5, borderColor: Colors.light.border,
+    borderRadius: 16, paddingVertical: 16,
+    backgroundColor: Colors.light.card,
   },
-  socialBtnTxt: { fontFamily: "Inter_700Bold", fontSize: 16, color: Colors.light.navy },
+  socialBtnTxt: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: Colors.light.navy },
 
   appleBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12,
-    backgroundColor: "#000", borderRadius: 16, paddingVertical: 18,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
+    backgroundColor: "#000", borderRadius: 16, paddingVertical: 16,
   },
-  appleBtnTxt: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#fff" },
-
-  resendBtn: { alignItems: "center", paddingVertical: 4 },
-  resendTxt: { fontFamily: "Inter_400Regular", fontSize: 14, color: Colors.light.textSecondary },
+  appleBtnTxt: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: "#fff" },
 
   footer: {
-    fontFamily: "Inter_400Regular", fontSize: 12,
-    color: "rgba(255,255,255,0.55)", textAlign: "center",
-    marginTop: 20, lineHeight: 18,
+    fontFamily: "Inter_400Regular", fontSize: 13,
+    color: "rgba(255,255,255,0.55)", textAlign: "center", marginTop: 20,
   },
 });
