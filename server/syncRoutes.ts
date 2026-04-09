@@ -4,6 +4,7 @@ import { getDb } from "./db";
 import {
   studentProfiles,
   skillMaps,
+  diagnosticResults,
   userXp,
   practiceSessions,
 } from "@shared/schema";
@@ -14,7 +15,7 @@ const router = Router();
 router.use(clerkMiddleware());
 router.use(requireAuth());
 
-// ── Shared types for skill-map blending ──────────────────────────────────────
+// ── Shared types ─────────────────────────────────────────────────────────────
 
 type SkillMap = Record<string, number>;
 
@@ -68,6 +69,65 @@ function blendSkillMap(baseline: SkillMap, sessions: SessionForBlend[]): SkillMa
   return blended;
 }
 
+/**
+ * Reads skill_maps rows for a user and returns {skillMap, baselineSkillMap} objects.
+ */
+async function readSkillMapForUser(
+  db: ReturnType<typeof getDb>,
+  userId: string
+): Promise<{ skillMap: SkillMap; baselineSkillMap: SkillMap }> {
+  const rows = await db.select().from(skillMaps).where(eq(skillMaps.userId, userId));
+  const skillMap: SkillMap = {};
+  const baselineSkillMap: SkillMap = {};
+  for (const row of rows) {
+    skillMap[row.topic] = row.score;
+    if (row.baselineScore > 0) {
+      baselineSkillMap[row.topic] = row.baselineScore;
+    }
+  }
+  return { skillMap, baselineSkillMap };
+}
+
+/**
+ * Upserts per-topic skill_map rows. When updatingBaseline=true, both score and
+ * baseline_score are written (used after diagnostic). When false, only score is
+ * written (used after practice sessions — baseline never changes).
+ */
+async function upsertSkillTopics(
+  db: ReturnType<typeof getDb>,
+  userId: string,
+  scores: SkillMap,
+  baselineScores: SkillMap,
+  updatingBaseline: boolean
+): Promise<void> {
+  const now = new Date().toISOString();
+  const topics = new Set([...Object.keys(scores), ...Object.keys(baselineScores)]);
+
+  await Promise.all(
+    Array.from(topics).map((topic) => {
+      const score = scores[topic] ?? 0;
+      const baselineScore = baselineScores[topic] ?? 0;
+      if (updatingBaseline) {
+        return db
+          .insert(skillMaps)
+          .values({ userId, topic, score, baselineScore, updatedAt: now })
+          .onConflictDoUpdate({
+            target: [skillMaps.userId, skillMaps.topic],
+            set: { score, baselineScore, updatedAt: now },
+          });
+      } else {
+        return db
+          .insert(skillMaps)
+          .values({ userId, topic, score, baselineScore: 0, updatedAt: now })
+          .onConflictDoUpdate({
+            target: [skillMaps.userId, skillMaps.topic],
+            set: { score, updatedAt: now },
+          });
+      }
+    })
+  );
+}
+
 // ── GET /api/me ──────────────────────────────────────────────────────────────
 router.get("/", async (req, res) => {
   try {
@@ -75,9 +135,9 @@ router.get("/", async (req, res) => {
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const db = getDb();
-    const [profile, skillMapRow, xpRow, sessions] = await Promise.all([
+    const [profile, diagRow, xpRow, sessions] = await Promise.all([
       db.select().from(studentProfiles).where(eq(studentProfiles.clerkUserId, userId)).limit(1),
-      db.select().from(skillMaps).where(eq(skillMaps.userId, userId)).limit(1),
+      db.select().from(diagnosticResults).where(eq(diagnosticResults.userId, userId)).limit(1),
       db.select().from(userXp).where(eq(userXp.userId, userId)).limit(1),
       db
         .select()
@@ -87,8 +147,9 @@ router.get("/", async (req, res) => {
         .limit(100),
     ]);
 
+    const { skillMap, baselineSkillMap } = await readSkillMapForUser(db, userId);
+
     const p = profile[0] ?? null;
-    const sm = skillMapRow[0] ?? null;
     const xp = xpRow[0] ?? null;
 
     res.json({
@@ -98,9 +159,9 @@ router.get("/", async (req, res) => {
       xp: xp
         ? { totalXp: xp.totalXp, streakDays: xp.streakDays, lastPracticeDate: xp.lastPracticeDate }
         : null,
-      skillMap: sm?.skillMap ?? null,
-      baselineSkillMap: sm?.baselineSkillMap ?? null,
-      diagnosticResult: sm?.diagnosticResult ?? null,
+      skillMap: Object.keys(skillMap).length > 0 ? skillMap : null,
+      baselineSkillMap: Object.keys(baselineSkillMap).length > 0 ? baselineSkillMap : null,
+      diagnosticResult: diagRow[0]?.result ?? null,
       sessions: sessions.map((s) => ({
         id: s.id,
         date: s.date,
@@ -173,11 +234,8 @@ router.put("/profile", async (req, res) => {
         set: { name, grade, subject, examDate: examDate ?? null },
       });
 
-    // Ensure skill_maps and user_xp rows exist for this user
-    await Promise.all([
-      db.insert(skillMaps).values({ userId, updatedAt: new Date().toISOString() }).onConflictDoNothing(),
-      db.insert(userXp).values({ userId, updatedAt: new Date().toISOString() }).onConflictDoNothing(),
-    ]);
+    // Ensure user_xp row exists for this user
+    await db.insert(userXp).values({ userId, updatedAt: new Date().toISOString() }).onConflictDoNothing();
 
     res.json({ ok: true });
   } catch (e) {
@@ -197,11 +255,11 @@ router.put("/diagnostic", async (req, res) => {
 
     const db = getDb();
     await db
-      .insert(skillMaps)
-      .values({ userId, diagnosticResult, updatedAt: new Date().toISOString() })
+      .insert(diagnosticResults)
+      .values({ userId, result: diagnosticResult, updatedAt: new Date().toISOString() })
       .onConflictDoUpdate({
-        target: skillMaps.userId,
-        set: { diagnosticResult, updatedAt: new Date().toISOString() },
+        target: diagnosticResults.userId,
+        set: { result: diagnosticResult, updatedAt: new Date().toISOString() },
       });
 
     res.json({ ok: true });
@@ -212,33 +270,22 @@ router.put("/diagnostic", async (req, res) => {
 });
 
 // ── PUT /api/me/skillmap ──────────────────────────────────────────────────────
+// Called after diagnostic: sets both score and baseline_score for each topic.
 router.put("/skillmap", async (req, res) => {
   try {
     const { userId } = getAuth(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const { skillMap, baselineSkillMap } = req.body as {
-      skillMap?: unknown;
-      baselineSkillMap?: unknown;
+      skillMap?: SkillMap;
+      baselineSkillMap?: SkillMap;
     };
 
     const db = getDb();
-    await db
-      .insert(skillMaps)
-      .values({
-        userId,
-        skillMap: skillMap ?? {},
-        baselineSkillMap: baselineSkillMap ?? {},
-        updatedAt: new Date().toISOString(),
-      })
-      .onConflictDoUpdate({
-        target: skillMaps.userId,
-        set: {
-          ...(skillMap !== undefined ? { skillMap } : {}),
-          ...(baselineSkillMap !== undefined ? { baselineSkillMap } : {}),
-          updatedAt: new Date().toISOString(),
-        },
-      });
+    const scores = skillMap ?? {};
+    const baseline = baselineSkillMap ?? scores;
+
+    await upsertSkillTopics(db, userId, scores, baseline, true);
 
     res.json({ ok: true });
   } catch (e) {
@@ -295,15 +342,14 @@ router.post("/sessions", async (req, res) => {
     }
 
     // ── Read current XP + skill-map rows ──────────────────────────────────────
-    const [xpRow, smRow] = await Promise.all([
-      db.select().from(userXp).where(eq(userXp.userId, userId)).limit(1),
-      db.select().from(skillMaps).where(eq(skillMaps.userId, userId)).limit(1),
+    const [xpRow, { baselineSkillMap }] = await Promise.all([
+      db.select().from(userXp).where(eq(userXp.userId, userId)).limit(1).then((r) => r[0]),
+      readSkillMapForUser(db, userId),
     ]);
 
-    const currentXp = xpRow[0]?.totalXp ?? 0;
-    const currentStreak = xpRow[0]?.streakDays ?? 0;
-    const lastPracticeDate = xpRow[0]?.lastPracticeDate ?? null;
-    const baseline = (smRow[0]?.baselineSkillMap ?? {}) as SkillMap;
+    const currentXp = xpRow?.totalXp ?? 0;
+    const currentStreak = xpRow?.streakDays ?? 0;
+    const lastPracticeDate = xpRow?.lastPracticeDate ?? null;
 
     // ── Compute XP + streak (only for new sessions) ────────────────────────────
     let newTotalXp = currentXp;
@@ -337,10 +383,10 @@ router.post("/sessions", async (req, res) => {
       answers: (s.answers ?? []) as AnswerRecord[],
     }));
 
-    const newSkillMap = blendSkillMap(baseline, sessions);
+    const newSkillMap = blendSkillMap(baselineSkillMap, sessions);
     const now = new Date().toISOString();
 
-    // ── Persist updates ────────────────────────────────────────────────────────
+    // ── Persist updates (score only, baseline unchanged) ──────────────────────
     await Promise.all([
       db
         .insert(userXp)
@@ -360,13 +406,7 @@ router.post("/sessions", async (req, res) => {
             updatedAt: now,
           },
         }),
-      db
-        .insert(skillMaps)
-        .values({ userId, skillMap: newSkillMap, updatedAt: now })
-        .onConflictDoUpdate({
-          target: skillMaps.userId,
-          set: { skillMap: newSkillMap, updatedAt: now },
-        }),
+      upsertSkillTopics(db, userId, newSkillMap, {}, false),
     ]);
 
     res.json({

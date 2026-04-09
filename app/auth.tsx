@@ -15,15 +15,18 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { useApp } from "@/context/AppContext";
 
 type AuthMode = "select" | "signup" | "signin";
-type AuthMethod = "phone" | "google" | "apple";
+type SignupStep = "profile" | "method";
 type PhoneStep = "enter" | "verify";
 
 type ClerkError = { code?: string; longMessage?: string; message?: string };
 type ClerkErrorResponse = { errors?: ClerkError[] };
-
 type PhoneCodeFactor = { strategy: "phone_code"; phoneNumberId: string };
+
+const GRADES = ["P4", "P5", "P6"] as const;
+type Grade = typeof GRADES[number];
 
 function extractErrorMessage(err: unknown): string {
   const e = err as ClerkErrorResponse;
@@ -35,6 +38,8 @@ const COUNTRY_CODES: { code: string; label: string }[] = [
   { code: "+1", label: "United States (+1)" },
 ];
 
+type AuthMethod = "phone" | "google" | "apple";
+
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -44,23 +49,48 @@ export default function AuthScreen() {
   const { signUp, isLoaded: signUpLoaded, setActive: setSignUpActive } = useSignUp();
   const { startOAuthFlow: startGoogle } = useOAuth({ strategy: "oauth_google" });
   const { startOAuthFlow: startApple } = useOAuth({ strategy: "oauth_apple" });
+  const { saveProfile } = useApp();
 
-  // Auth mode — first the user picks Sign Up or Sign In, then proceeds to auth method
+  // ── Navigation state ───────────────────────────────────────────────────────
   const [authMode, setAuthMode] = useState<AuthMode>("select");
+  // Signup flows through "profile" (name + grade) THEN "method" (auth choice)
+  const [signupStep, setSignupStep] = useState<SignupStep>("profile");
   const [method, setMethod] = useState<AuthMethod>("phone");
   const [phoneStep, setPhoneStep] = useState<PhoneStep>("enter");
+
+  // ── Sign-up profile fields (collected BEFORE auth) ─────────────────────────
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserGrade, setNewUserGrade] = useState<Grade | null>(null);
+
+  // ── Phone auth ─────────────────────────────────────────────────────────────
   const [countryIdx, setCountryIdx] = useState(0);
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pendingVerification, setPendingVerification] = useState<"signIn" | "signUp" | null>(null);
 
   const country = COUNTRY_CODES[countryIdx] ?? COUNTRY_CODES[0];
   const fullPhone = country.code + phone.trim().replace(/^0+/, "");
 
-  function pickMode(mode: "signup" | "signin") {
+  // ── Navigation helpers ─────────────────────────────────────────────────────
+  function goBack() {
+    Haptics.selectionAsync();
+    setError(null);
+    if (phoneStep === "verify") {
+      setPhoneStep("enter");
+      setCode("");
+    } else if (authMode === "signup" && signupStep === "method") {
+      setSignupStep("profile");
+      setPhoneStep("enter");
+    } else {
+      setAuthMode("select");
+      setSignupStep("profile");
+      setPhoneStep("enter");
+    }
+  }
+
+  function selectMode(mode: "signup" | "signin") {
     Haptics.selectionAsync();
     setAuthMode(mode);
     setError(null);
@@ -74,44 +104,26 @@ export default function AuthScreen() {
     setCode("");
   }
 
-  function goBack() {
-    Haptics.selectionAsync();
-    if (phoneStep === "verify") {
-      setPhoneStep("enter");
-      setCode("");
-      setError(null);
-    } else {
-      setAuthMode("select");
-      setMethod("phone");
-      setPhoneStep("enter");
-      setCode("");
-      setError(null);
-    }
-  }
-
+  // ── Phone send code ────────────────────────────────────────────────────────
   async function handleSendCode() {
     if (!phone.trim() || !signInLoaded || !signUpLoaded) return;
     setLoading(true);
     setError(null);
     try {
       if (authMode === "signin") {
-        // Sign-in flow: look up existing account
         const attempt = await signIn!.create({ identifier: fullPhone });
         const factor = attempt.supportedFirstFactors?.find(
           (f) => f.strategy === "phone_code"
         ) as PhoneCodeFactor | undefined;
         if (factor) {
           await signIn!.prepareFirstFactor({ strategy: "phone_code", phoneNumberId: factor.phoneNumberId });
-          setPendingVerification("signIn");
           setPhoneStep("verify");
         } else {
           setError("Phone sign-in is not available. Please use Google or Apple.");
         }
       } else {
-        // Sign-up flow: create a new account
         await signUp!.create({ phoneNumber: fullPhone });
         await signUp!.preparePhoneNumberVerification({ strategy: "phone_code" });
-        setPendingVerification("signUp");
         setPhoneStep("verify");
       }
     } catch (err: unknown) {
@@ -121,21 +133,29 @@ export default function AuthScreen() {
     }
   }
 
+  // ── Phone verify code ──────────────────────────────────────────────────────
   async function handleVerifyCode() {
     if (code.length < 6) return;
     setLoading(true);
     setError(null);
     try {
-      if (pendingVerification === "signIn") {
+      if (authMode === "signin") {
         const result = await signIn!.attemptFirstFactor({ strategy: "phone_code", code });
         if (result.status === "complete") {
           await setSignInActive!({ session: result.createdSessionId });
           router.replace("/");
         }
       } else {
-        // Sign-up: activate session immediately — profile is collected in onboarding
         const result = await signUp!.attemptPhoneNumberVerification({ code });
         if (result.status === "complete" && result.createdSessionId) {
+          // Save profile locally before activating session — profile was collected
+          // in the "profile" step before authentication, so we have name + grade.
+          await saveProfile({
+            name: newUserName.trim(),
+            grade: newUserGrade!,
+            subject: "Both",
+            createdAt: new Date().toISOString(),
+          });
           await setSignUpActive!({ session: result.createdSessionId });
           router.replace("/");
         }
@@ -147,12 +167,21 @@ export default function AuthScreen() {
     }
   }
 
+  // ── OAuth ──────────────────────────────────────────────────────────────────
   async function handleGoogleAuth() {
     setLoading(true);
     setError(null);
     try {
       const { createdSessionId, setActive } = await startGoogle();
       if (createdSessionId && setActive) {
+        if (authMode === "signup") {
+          await saveProfile({
+            name: newUserName.trim(),
+            grade: newUserGrade!,
+            subject: "Both",
+            createdAt: new Date().toISOString(),
+          });
+        }
         await setActive({ session: createdSessionId });
         router.replace("/");
       }
@@ -169,6 +198,14 @@ export default function AuthScreen() {
     try {
       const { createdSessionId, setActive } = await startApple();
       if (createdSessionId && setActive) {
+        if (authMode === "signup") {
+          await saveProfile({
+            name: newUserName.trim(),
+            grade: newUserGrade!,
+            subject: "Both",
+            createdAt: new Date().toISOString(),
+          });
+        }
         await setActive({ session: createdSessionId });
         router.replace("/");
       }
@@ -185,6 +222,19 @@ export default function AuthScreen() {
     ...(Platform.OS === "ios" ? [{ id: "apple" as AuthMethod, label: "Apple", icon: "logo-apple" }] : []),
   ];
 
+  const isProfileComplete = newUserName.trim().length > 0 && newUserGrade !== null;
+
+  // ── Shared card header (back button) ──────────────────────────────────────
+  const showBack = authMode !== "select";
+  const backLabel =
+    authMode === "signup" && signupStep === "method" && phoneStep === "verify"
+      ? "Back"
+      : authMode === "signup" && signupStep === "method"
+        ? "Your Details"
+        : authMode === "signup"
+          ? "Back"
+          : "Back";
+
   return (
     <ScrollView
       contentContainerStyle={[styles.container, { paddingTop: topPad + 16, paddingBottom: bottomPad + 32 }]}
@@ -200,19 +250,36 @@ export default function AuthScreen() {
         <Text style={styles.tagline}>
           {authMode === "select"
             ? "Save your progress and access it on any device"
-            : authMode === "signup"
-              ? "Create your account to get started"
-              : "Welcome back — sign in to continue"}
+            : authMode === "signup" && signupStep === "profile"
+              ? "Tell us about yourself to get started"
+              : authMode === "signup"
+                ? "Verify your identity to create your account"
+                : "Welcome back — sign in to continue"}
         </Text>
       </View>
 
       {/* Card */}
       <View style={styles.card}>
+        {/* Back button */}
+        {showBack && (
+          <TouchableOpacity style={styles.backRow} onPress={goBack} testID="auth-back">
+            <Ionicons name="arrow-back" size={18} color={Colors.light.navy} />
+            <Text style={styles.backTxt}>{backLabel}</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Error banner */}
+        {error ? (
+          <View style={styles.errorCard}>
+            <Ionicons name="alert-circle" size={16} color={Colors.light.rust} />
+            <Text style={styles.errorTxt}>{error}</Text>
+          </View>
+        ) : null}
 
         {/* ── Mode selection ── */}
         {authMode === "select" && (
           <View style={styles.form}>
-            <TouchableOpacity style={styles.modeBtn} onPress={() => pickMode("signup")} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.modeBtn} onPress={() => selectMode("signup")} activeOpacity={0.85} testID="auth-signup-btn">
               <View style={styles.modeBtnIcon}>
                 <Ionicons name="person-add-outline" size={22} color={Colors.light.navy} />
               </View>
@@ -223,7 +290,7 @@ export default function AuthScreen() {
               <Ionicons name="chevron-forward" size={18} color={Colors.light.textSecondary} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.modeBtn} onPress={() => pickMode("signin")} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.modeBtn} onPress={() => selectMode("signin")} activeOpacity={0.85} testID="auth-signin-btn">
               <View style={styles.modeBtnIcon}>
                 <Ionicons name="log-in-outline" size={22} color={Colors.light.navy} />
               </View>
@@ -233,172 +300,193 @@ export default function AuthScreen() {
               </View>
               <Ionicons name="chevron-forward" size={18} color={Colors.light.textSecondary} />
             </TouchableOpacity>
-
-            {error ? (
-              <View style={styles.errorCard}>
-                <Ionicons name="alert-circle" size={16} color={Colors.light.rust} />
-                <Text style={styles.errorTxt}>{error}</Text>
-              </View>
-            ) : null}
           </View>
         )}
 
-        {/* ── Back button + method tabs (for signup / signin modes) ── */}
-        {authMode !== "select" && (
-          <>
-            <TouchableOpacity style={styles.backRow} onPress={goBack}>
-              <Ionicons name="arrow-back" size={18} color={Colors.light.navy} />
-              <Text style={styles.backTxt}>
-                {authMode === "signup" ? "New Student" : "Returning Student"}
-              </Text>
-            </TouchableOpacity>
-
-            <View style={styles.tabs}>
-              {tabs.map((tab) => (
+        {/* ── Sign-up: profile step (name + grade BEFORE auth) ── */}
+        {authMode === "signup" && signupStep === "profile" && (
+          <View style={styles.form}>
+            <Text style={styles.fieldLabel}>Your Name</Text>
+            <TextInput
+              style={styles.phoneInput}
+              placeholder="e.g. Emeka Chukwu"
+              placeholderTextColor={Colors.light.textTertiary}
+              value={newUserName}
+              onChangeText={setNewUserName}
+              autoFocus
+              autoCapitalize="words"
+              testID="auth-name-input"
+            />
+            <Text style={[styles.fieldLabel, { marginTop: 4 }]}>Your Class</Text>
+            <View style={styles.gradeRow}>
+              {GRADES.map((g) => (
                 <TouchableOpacity
-                  key={tab.id}
-                  style={[styles.tab, method === tab.id && styles.tabActive]}
-                  onPress={() => switchMethod(tab.id)}
-                  activeOpacity={0.8}
+                  key={g}
+                  style={[styles.gradeBtn, newUserGrade === g && styles.gradeBtnActive]}
+                  onPress={() => { Haptics.selectionAsync(); setNewUserGrade(g); }}
+                  testID={`auth-grade-${g}`}
                 >
-                  <Ionicons
-                    name={tab.icon as React.ComponentProps<typeof Ionicons>["name"]}
-                    size={15}
-                    color={method === tab.id ? "#fff" : Colors.light.textSecondary}
-                  />
-                  <Text style={[styles.tabTxt, method === tab.id && styles.tabTxtActive]}>
-                    {tab.label}
+                  <Text style={[styles.gradeBtnTxt, newUserGrade === g && styles.gradeBtnTxtActive]}>
+                    {g}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
-          </>
+            <Text style={styles.hint}>You can update these later from the Parent Dashboard</Text>
+            <TouchableOpacity
+              style={[styles.primaryBtn, !isProfileComplete && styles.btnDisabled]}
+              onPress={() => { Haptics.selectionAsync(); setSignupStep("method"); setError(null); }}
+              disabled={!isProfileComplete}
+              testID="auth-profile-continue"
+            >
+              <Text style={styles.primaryBtnTxt}>Continue</Text>
+              <Ionicons name="arrow-forward" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
         )}
 
-        {/* Error banner (for signup/signin modes) */}
-        {authMode !== "select" && error ? (
-          <View style={styles.errorCard}>
-            <Ionicons name="alert-circle" size={16} color={Colors.light.rust} />
-            <Text style={styles.errorTxt}>{error}</Text>
+        {/* ── Auth method tabs (signup method step OR signin) ── */}
+        {(authMode === "signin" || (authMode === "signup" && signupStep === "method")) && (
+          <View style={styles.tabs}>
+            {tabs.map((tab) => (
+              <TouchableOpacity
+                key={tab.id}
+                style={[styles.tab, method === tab.id && styles.tabActive]}
+                onPress={() => switchMethod(tab.id)}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={tab.icon as React.ComponentProps<typeof Ionicons>["name"]}
+                  size={15}
+                  color={method === tab.id ? "#fff" : Colors.light.textSecondary}
+                />
+                <Text style={[styles.tabTxt, method === tab.id && styles.tabTxtActive]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        ) : null}
+        )}
 
         {/* ── Phone: enter number ── */}
-        {authMode !== "select" && method === "phone" && phoneStep === "enter" && (
-          <View style={styles.form}>
-            <Text style={styles.fieldLabel}>Phone Number</Text>
-            <View style={styles.phoneRow}>
+        {(authMode === "signin" || (authMode === "signup" && signupStep === "method")) &&
+          method === "phone" && phoneStep === "enter" && (
+            <View style={styles.form}>
+              <Text style={styles.fieldLabel}>Phone Number</Text>
+              <View style={styles.phoneRow}>
+                <TouchableOpacity
+                  style={styles.countryBtn}
+                  onPress={() => { Haptics.selectionAsync(); setCountryIdx((i) => (i + 1) % COUNTRY_CODES.length); }}
+                >
+                  <Text style={styles.countryCode}>{country.code}</Text>
+                  <Ionicons name="chevron-down" size={12} color={Colors.light.textSecondary} />
+                </TouchableOpacity>
+                <TextInput
+                  style={styles.phoneInput}
+                  placeholder="8012345678"
+                  placeholderTextColor={Colors.light.textTertiary}
+                  keyboardType="phone-pad"
+                  value={phone}
+                  onChangeText={setPhone}
+                  maxLength={15}
+                  autoFocus
+                  testID="auth-phone-input"
+                />
+              </View>
+              <Text style={styles.hint}>{country.label} — we'll send a 6-digit code</Text>
               <TouchableOpacity
-                style={styles.countryBtn}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setCountryIdx((i) => (i + 1) % COUNTRY_CODES.length);
-                }}
+                style={[styles.primaryBtn, (!phone.trim() || loading) && styles.btnDisabled]}
+                onPress={handleSendCode}
+                disabled={!phone.trim() || loading}
+                testID="auth-send-code-btn"
               >
-                <Text style={styles.countryCode}>{country.code}</Text>
-                <Ionicons name="chevron-down" size={12} color={Colors.light.textSecondary} />
+                {loading
+                  ? <ActivityIndicator color="#fff" />
+                  : <><Text style={styles.primaryBtnTxt}>Send Code</Text><Ionicons name="arrow-forward" size={18} color="#fff" /></>
+                }
               </TouchableOpacity>
-              <TextInput
-                style={styles.phoneInput}
-                placeholder="8012345678"
-                placeholderTextColor={Colors.light.textTertiary}
-                keyboardType="phone-pad"
-                value={phone}
-                onChangeText={setPhone}
-                maxLength={15}
-                autoFocus
-              />
             </View>
-            <Text style={styles.hint}>{country.label} — we'll send a 6-digit code</Text>
-            <TouchableOpacity
-              style={[styles.primaryBtn, (!phone.trim() || loading) && styles.btnDisabled]}
-              onPress={handleSendCode}
-              disabled={!phone.trim() || loading}
-            >
-              {loading
-                ? <ActivityIndicator color="#fff" />
-                : <><Text style={styles.primaryBtnTxt}>Send Code</Text><Ionicons name="arrow-forward" size={18} color="#fff" /></>
-              }
-            </TouchableOpacity>
-          </View>
-        )}
+          )}
 
         {/* ── Phone: verify code ── */}
-        {authMode !== "select" && method === "phone" && phoneStep === "verify" && (
-          <View style={styles.form}>
-            <TouchableOpacity style={styles.inlineBack} onPress={() => { setPhoneStep("enter"); setCode(""); setError(null); }}>
-              <Ionicons name="arrow-back" size={18} color={Colors.light.navy} />
-              <Text style={styles.backTxt}>Back</Text>
-            </TouchableOpacity>
-            <Text style={styles.fieldLabel}>Enter the 6-digit code</Text>
-            <Text style={styles.hint}>Sent to {fullPhone}</Text>
-            <TextInput
-              style={[styles.phoneInput, styles.codeInput]}
-              placeholder="000000"
-              placeholderTextColor={Colors.light.textTertiary}
-              keyboardType="number-pad"
-              value={code}
-              onChangeText={(t) => setCode(t.replace(/\D/g, "").slice(0, 6))}
-              maxLength={6}
-              autoFocus
-            />
-            <TouchableOpacity
-              style={[styles.primaryBtn, (code.length < 6 || loading) && styles.btnDisabled]}
-              onPress={handleVerifyCode}
-              disabled={code.length < 6 || loading}
-            >
-              {loading
-                ? <ActivityIndicator color="#fff" />
-                : <><Text style={styles.primaryBtnTxt}>Verify Code</Text><Ionicons name="checkmark" size={18} color="#fff" /></>
-              }
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.resendBtn} onPress={handleSendCode} disabled={loading}>
-              <Text style={styles.resendTxt}>Resend code</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        {(authMode === "signin" || (authMode === "signup" && signupStep === "method")) &&
+          method === "phone" && phoneStep === "verify" && (
+            <View style={styles.form}>
+              <Text style={styles.fieldLabel}>Enter the 6-digit code</Text>
+              <Text style={styles.hint}>Sent to {fullPhone}</Text>
+              <TextInput
+                style={[styles.phoneInput, styles.codeInput]}
+                placeholder="000000"
+                placeholderTextColor={Colors.light.textTertiary}
+                keyboardType="number-pad"
+                value={code}
+                onChangeText={(t) => setCode(t.replace(/\D/g, "").slice(0, 6))}
+                maxLength={6}
+                autoFocus
+                testID="auth-code-input"
+              />
+              <TouchableOpacity
+                style={[styles.primaryBtn, (code.length < 6 || loading) && styles.btnDisabled]}
+                onPress={handleVerifyCode}
+                disabled={code.length < 6 || loading}
+                testID="auth-verify-btn"
+              >
+                {loading
+                  ? <ActivityIndicator color="#fff" />
+                  : <><Text style={styles.primaryBtnTxt}>Verify Code</Text><Ionicons name="checkmark" size={18} color="#fff" /></>
+                }
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.resendBtn} onPress={handleSendCode} disabled={loading}>
+                <Text style={styles.resendTxt}>Resend code</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
         {/* ── Google ── */}
-        {authMode !== "select" && method === "google" && (
-          <View style={styles.form}>
-            <Text style={styles.hint}>
-              {authMode === "signup"
-                ? "Use your Google account to create a SabiLab account"
-                : "Use your Google account to sign in"}
-            </Text>
-            <TouchableOpacity
-              style={[styles.socialBtn, loading && styles.btnDisabled]}
-              onPress={handleGoogleAuth}
-              disabled={loading}
-            >
-              {loading
-                ? <ActivityIndicator color={Colors.light.navy} />
-                : <><Ionicons name="logo-google" size={20} color="#EA4335" /><Text style={styles.socialBtnTxt}>Continue with Google</Text></>
-              }
-            </TouchableOpacity>
-          </View>
-        )}
+        {(authMode === "signin" || (authMode === "signup" && signupStep === "method")) &&
+          method === "google" && (
+            <View style={styles.form}>
+              <Text style={styles.hint}>
+                {authMode === "signup"
+                  ? "Use your Google account to create a SabiLab account"
+                  : "Use your Google account to sign in"}
+              </Text>
+              <TouchableOpacity
+                style={[styles.socialBtn, loading && styles.btnDisabled]}
+                onPress={handleGoogleAuth}
+                disabled={loading}
+                testID="auth-google-btn"
+              >
+                {loading
+                  ? <ActivityIndicator color={Colors.light.navy} />
+                  : <><Ionicons name="logo-google" size={20} color="#EA4335" /><Text style={styles.socialBtnTxt}>Continue with Google</Text></>
+                }
+              </TouchableOpacity>
+            </View>
+          )}
 
         {/* ── Apple (iOS only) ── */}
-        {authMode !== "select" && method === "apple" && Platform.OS === "ios" && (
-          <View style={styles.form}>
-            <Text style={styles.hint}>
-              {authMode === "signup"
-                ? "Use your Apple ID to create a SabiLab account"
-                : "Use your Apple ID to sign in"}
-            </Text>
-            <TouchableOpacity
-              style={[styles.appleBtn, loading && styles.btnDisabled]}
-              onPress={handleAppleAuth}
-              disabled={loading}
-            >
-              {loading
-                ? <ActivityIndicator color="#fff" />
-                : <><Ionicons name="logo-apple" size={20} color="#fff" /><Text style={styles.appleBtnTxt}>Sign in with Apple</Text></>
-              }
-            </TouchableOpacity>
-          </View>
-        )}
+        {(authMode === "signin" || (authMode === "signup" && signupStep === "method")) &&
+          method === "apple" && Platform.OS === "ios" && (
+            <View style={styles.form}>
+              <Text style={styles.hint}>
+                {authMode === "signup"
+                  ? "Use your Apple ID to create a SabiLab account"
+                  : "Use your Apple ID to sign in"}
+              </Text>
+              <TouchableOpacity
+                style={[styles.appleBtn, loading && styles.btnDisabled]}
+                onPress={handleAppleAuth}
+                disabled={loading}
+                testID="auth-apple-btn"
+              >
+                {loading
+                  ? <ActivityIndicator color="#fff" />
+                  : <><Ionicons name="logo-apple" size={20} color="#fff" /><Text style={styles.appleBtnTxt}>Sign in with Apple</Text></>
+                }
+              </TouchableOpacity>
+            </View>
+          )}
       </View>
 
       <Text style={styles.footer}>
@@ -424,6 +512,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
     borderRadius: 28, padding: 20, gap: 16,
   },
+
+  backRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  backTxt: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: Colors.light.navy },
 
   // Mode selection
   modeBtn: {
@@ -461,6 +552,17 @@ const styles = StyleSheet.create({
   fieldLabel: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: Colors.light.navy },
   hint: { fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary, lineHeight: 20 },
 
+  gradeRow: { flexDirection: "row", gap: 10 },
+  gradeBtn: {
+    flex: 1, height: 52, borderRadius: 14,
+    backgroundColor: Colors.light.card,
+    borderWidth: 2, borderColor: Colors.light.border,
+    justifyContent: "center", alignItems: "center",
+  },
+  gradeBtnActive: { backgroundColor: Colors.light.navy, borderColor: Colors.light.navy },
+  gradeBtnTxt: { fontFamily: "Inter_700Bold", fontSize: 18, color: Colors.light.textSecondary },
+  gradeBtnTxtActive: { color: "#fff" },
+
   phoneRow: { flexDirection: "row", gap: 8 },
   countryBtn: {
     flexDirection: "row", alignItems: "center", gap: 4,
@@ -478,10 +580,6 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: Colors.light.border,
   },
   codeInput: { flex: 0, textAlign: "center", letterSpacing: 10, fontSize: 22 },
-
-  backRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  inlineBack: { flexDirection: "row", alignItems: "center", gap: 6 },
-  backTxt: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: Colors.light.navy },
 
   primaryBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,

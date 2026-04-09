@@ -380,17 +380,19 @@ export function AppProvider({
       if (!data.profile) {
         // Server has no data for this account.
         if (shouldMigrate) {
-          // Check if there is local guest data worth migrating.
-          // If so, prompt the user to decide — never migrate without consent.
-          const hasLocalData =
-            profile !== null ||
-            sessions.length > 0 ||
-            totalXP > 0 ||
-            diagnosticResult !== null;
-          if (hasLocalData) {
+          // Check for meaningful guest data (sessions / XP / diagnostic) that
+          // existed BEFORE this sign-up. A profile alone is NOT considered guest
+          // data — it may have been saved from the sign-up flow itself and should
+          // be auto-synced without prompting the user.
+          const hasGuestData = sessions.length > 0 || totalXP > 0 || diagnosticResult !== null;
+          if (hasGuestData) {
+            // Prompt the user before migrating — never merge data without consent.
+            // MigrationPromptModal in _layout.tsx will call confirmMigration().
             setPendingMigration(true);
-            // The migration prompt (MigrationPromptModal in _layout.tsx) will call
-            // confirmMigration(true/false) to proceed.
+          } else if (profile) {
+            // New user who filled profile in the sign-up flow but has no prior
+            // guest sessions — auto-sync profile silently (no prompt needed).
+            await migrateLocalToServer();
           }
         }
         // For user switch (shouldMigrate=false) server had no data — state was
@@ -478,8 +480,9 @@ export function AppProvider({
         lastPracticeDate: null,
       }));
     }
-    // Push sessions individually (server de-dupes via onConflictDoNothing).
-    for (const s of sessions.slice(0, 50)) {
+    // Push all local sessions individually (server de-dupes via idempotent POST).
+    // Local sessions are already capped at 100 by the app, so this is bounded.
+    for (const s of sessions) {
       tasks.push(syncPost("/api/me/sessions", { ...s, xpEarned: s.score * 10 + 20 }));
     }
 

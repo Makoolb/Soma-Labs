@@ -1,3 +1,9 @@
+CREATE TABLE "diagnostic_results" (
+	"user_id" text PRIMARY KEY NOT NULL,
+	"result" jsonb NOT NULL,
+	"updated_at" text
+);
+--> statement-breakpoint
 CREATE TABLE "practice_sessions" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
@@ -11,11 +17,12 @@ CREATE TABLE "practice_sessions" (
 );
 --> statement-breakpoint
 CREATE TABLE "skill_maps" (
-	"user_id" text PRIMARY KEY NOT NULL,
-	"skill_map" jsonb DEFAULT '{}'::jsonb,
-	"baseline_skill_map" jsonb DEFAULT '{}'::jsonb,
-	"diagnostic_result" jsonb,
-	"updated_at" text
+	"user_id" text NOT NULL,
+	"topic" text NOT NULL,
+	"score" integer DEFAULT 0 NOT NULL,
+	"baseline_score" integer DEFAULT 0 NOT NULL,
+	"updated_at" text,
+	CONSTRAINT "skill_maps_user_id_topic_pk" PRIMARY KEY("user_id","topic")
 );
 --> statement-breakpoint
 CREATE TABLE "student_profiles" (

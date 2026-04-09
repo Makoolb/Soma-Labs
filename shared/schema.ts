@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, jsonb, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, jsonb, serial, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -30,22 +30,30 @@ export const studentProfiles = pgTable("student_profiles", {
 });
 
 /**
- * skill_maps stores per-user skill data as JSONB objects (topic → score%).
+ * skill_maps stores one row per (user, topic) — the per-topic structure
+ * enables topic-level analytics and clean upserts from practice sessions.
  *
- * Architectural note: the topic-score pairs are stored as a single JSONB object
- * rather than normalised per-topic rows. This is intentional:
- *   - The skill map is always read/written as a unit (blending, display).
- *   - The topic set is dynamic and differs by grade/subject.
- *   - A JSONB blob avoids N-row reads/writes per session and simplifies the
- *     blending algorithm which operates on the whole map at once.
- * If per-topic analytics (aggregation, ranking across users) are needed later,
- * the map can be exploded into a separate analytics table at that point.
+ * - score:         blended score (diagnostic baseline weighted with practice accuracy)
+ * - baseline_score: raw diagnostic score for this topic (set once after diagnostic,
+ *                   never overwritten by practice syncs)
  */
 export const skillMaps = pgTable("skill_maps", {
+  userId: text("user_id").notNull(),
+  topic: text("topic").notNull(),
+  score: integer("score").notNull().default(0),
+  baselineScore: integer("baseline_score").notNull().default(0),
+  updatedAt: text("updated_at"),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.userId, table.topic] }),
+}));
+
+/**
+ * diagnostic_results stores the raw diagnostic outcome per user.
+ * Separate from skill_maps so it can be retrieved independently.
+ */
+export const diagnosticResults = pgTable("diagnostic_results", {
   userId: text("user_id").primaryKey(),
-  skillMap: jsonb("skill_map").default(sql`'{}'::jsonb`),
-  baselineSkillMap: jsonb("baseline_skill_map").default(sql`'{}'::jsonb`),
-  diagnosticResult: jsonb("diagnostic_result"),
+  result: jsonb("result").notNull(),
   updatedAt: text("updated_at"),
 });
 
