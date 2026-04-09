@@ -283,9 +283,15 @@ router.put("/skillmap", async (req, res) => {
 
     const db = getDb();
     const scores = skillMap ?? {};
-    const baseline = baselineSkillMap ?? scores;
 
-    await upsertSkillTopics(db, userId, scores, baseline, true);
+    // updatingBaseline=true ONLY when the caller explicitly supplies baselineSkillMap
+    // (i.e. immediately after a diagnostic). A caller that supplies only skillMap
+    // (e.g. a blended-score update) must go through POST /api/me/sessions, which
+    // uses updatingBaseline=false and never touches baseline_score.
+    const hasExplicitBaseline = baselineSkillMap !== undefined && baselineSkillMap !== null;
+    const baseline = hasExplicitBaseline ? (baselineSkillMap as SkillMap) : scores;
+
+    await upsertSkillTopics(db, userId, scores, baseline, hasExplicitBaseline);
 
     res.json({ ok: true });
   } catch (e) {

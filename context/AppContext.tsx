@@ -564,8 +564,10 @@ export function AppProvider({
         const blended = blendSkillMap(baseline, updated);
         setSkillMap(blended);
         AsyncStorage.setItem(KEYS.SKILL_MAP, JSON.stringify(blended)).catch(() => undefined);
-        // Sync updated skill map to server (fire-and-forget).
-        syncPut("/api/me/skillmap", { skillMap: blended });
+        // Do NOT call PUT /api/me/skillmap here — that endpoint is for the
+        // diagnostic baseline and would overwrite baseline_score with the blended
+        // value. POST /api/me/sessions (below) recomputes the blended map
+        // server-side and returns the authoritative skill-map in its response.
       }
       return updated;
     });
