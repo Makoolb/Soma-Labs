@@ -29,14 +29,20 @@ export const studentProfiles = pgTable("student_profiles", {
   createdAt: text("created_at"),
 });
 
-export const userProgress = pgTable("user_progress", {
+export const skillMaps = pgTable("skill_maps", {
+  userId: text("user_id").primaryKey(),
+  skillMap: jsonb("skill_map").default(sql`'{}'::jsonb`),
+  baselineSkillMap: jsonb("baseline_skill_map").default(sql`'{}'::jsonb`),
+  diagnosticResult: jsonb("diagnostic_result"),
+  updatedAt: text("updated_at"),
+});
+
+export const userXp = pgTable("user_xp", {
   userId: text("user_id").primaryKey(),
   totalXp: integer("total_xp").notNull().default(0),
   streakDays: integer("streak_days").notNull().default(0),
   lastPracticeDate: text("last_practice_date"),
-  skillMap: jsonb("skill_map").default(sql`'{}'::jsonb`),
-  baselineSkillMap: jsonb("baseline_skill_map").default(sql`'{}'::jsonb`),
-  diagnosticResult: jsonb("diagnostic_result"),
+  updatedAt: text("updated_at"),
 });
 
 export const practiceSessions = pgTable("practice_sessions", {

@@ -3,7 +3,8 @@ import { clerkMiddleware, requireAuth, getAuth } from "@clerk/express";
 import { getDb } from "./db";
 import {
   studentProfiles,
-  userProgress,
+  skillMaps,
+  userXp,
   practiceSessions,
 } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
@@ -74,9 +75,10 @@ router.get("/", async (req, res) => {
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const db = getDb();
-    const [profile, progress, sessions] = await Promise.all([
+    const [profile, skillMapRow, xpRow, sessions] = await Promise.all([
       db.select().from(studentProfiles).where(eq(studentProfiles.clerkUserId, userId)).limit(1),
-      db.select().from(userProgress).where(eq(userProgress.userId, userId)).limit(1),
+      db.select().from(skillMaps).where(eq(skillMaps.userId, userId)).limit(1),
+      db.select().from(userXp).where(eq(userXp.userId, userId)).limit(1),
       db
         .select()
         .from(practiceSessions)
@@ -86,18 +88,19 @@ router.get("/", async (req, res) => {
     ]);
 
     const p = profile[0] ?? null;
-    const prog = progress[0] ?? null;
+    const sm = skillMapRow[0] ?? null;
+    const xp = xpRow[0] ?? null;
 
     res.json({
       profile: p
         ? { name: p.name, grade: p.grade, subject: p.subject, examDate: p.examDate ?? undefined }
         : null,
-      xp: prog
-        ? { totalXp: prog.totalXp, streakDays: prog.streakDays, lastPracticeDate: prog.lastPracticeDate }
+      xp: xp
+        ? { totalXp: xp.totalXp, streakDays: xp.streakDays, lastPracticeDate: xp.lastPracticeDate }
         : null,
-      skillMap: prog?.skillMap ?? null,
-      baselineSkillMap: prog?.baselineSkillMap ?? null,
-      diagnosticResult: prog?.diagnosticResult ?? null,
+      skillMap: sm?.skillMap ?? null,
+      baselineSkillMap: sm?.baselineSkillMap ?? null,
+      diagnosticResult: sm?.diagnosticResult ?? null,
       sessions: sessions.map((s) => ({
         id: s.id,
         date: s.date,
@@ -170,7 +173,11 @@ router.put("/profile", async (req, res) => {
         set: { name, grade, subject, examDate: examDate ?? null },
       });
 
-    await db.insert(userProgress).values({ userId }).onConflictDoNothing();
+    // Ensure skill_maps and user_xp rows exist for this user
+    await Promise.all([
+      db.insert(skillMaps).values({ userId, updatedAt: new Date().toISOString() }).onConflictDoNothing(),
+      db.insert(userXp).values({ userId, updatedAt: new Date().toISOString() }).onConflictDoNothing(),
+    ]);
 
     res.json({ ok: true });
   } catch (e) {
@@ -190,9 +197,12 @@ router.put("/diagnostic", async (req, res) => {
 
     const db = getDb();
     await db
-      .insert(userProgress)
-      .values({ userId, diagnosticResult })
-      .onConflictDoUpdate({ target: userProgress.userId, set: { diagnosticResult } });
+      .insert(skillMaps)
+      .values({ userId, diagnosticResult, updatedAt: new Date().toISOString() })
+      .onConflictDoUpdate({
+        target: skillMaps.userId,
+        set: { diagnosticResult, updatedAt: new Date().toISOString() },
+      });
 
     res.json({ ok: true });
   } catch (e) {
@@ -214,13 +224,19 @@ router.put("/skillmap", async (req, res) => {
 
     const db = getDb();
     await db
-      .insert(userProgress)
-      .values({ userId, skillMap: skillMap ?? {}, baselineSkillMap: baselineSkillMap ?? {} })
+      .insert(skillMaps)
+      .values({
+        userId,
+        skillMap: skillMap ?? {},
+        baselineSkillMap: baselineSkillMap ?? {},
+        updatedAt: new Date().toISOString(),
+      })
       .onConflictDoUpdate({
-        target: userProgress.userId,
+        target: skillMaps.userId,
         set: {
           ...(skillMap !== undefined ? { skillMap } : {}),
           ...(baselineSkillMap !== undefined ? { baselineSkillMap } : {}),
+          updatedAt: new Date().toISOString(),
         },
       });
 
@@ -278,17 +294,16 @@ router.post("/sessions", async (req, res) => {
       });
     }
 
-    // ── Read current progress ──────────────────────────────────────────────────
-    const [current] = await db
-      .select()
-      .from(userProgress)
-      .where(eq(userProgress.userId, userId))
-      .limit(1);
+    // ── Read current XP + skill-map rows ──────────────────────────────────────
+    const [xpRow, smRow] = await Promise.all([
+      db.select().from(userXp).where(eq(userXp.userId, userId)).limit(1),
+      db.select().from(skillMaps).where(eq(skillMaps.userId, userId)).limit(1),
+    ]);
 
-    const currentXp = current?.totalXp ?? 0;
-    const currentStreak = current?.streakDays ?? 0;
-    const lastPracticeDate = current?.lastPracticeDate ?? null;
-    const baseline = (current?.baselineSkillMap ?? {}) as SkillMap;
+    const currentXp = xpRow[0]?.totalXp ?? 0;
+    const currentStreak = xpRow[0]?.streakDays ?? 0;
+    const lastPracticeDate = xpRow[0]?.lastPracticeDate ?? null;
+    const baseline = (smRow[0]?.baselineSkillMap ?? {}) as SkillMap;
 
     // ── Compute XP + streak (only for new sessions) ────────────────────────────
     let newTotalXp = currentXp;
@@ -323,26 +338,36 @@ router.post("/sessions", async (req, res) => {
     }));
 
     const newSkillMap = blendSkillMap(baseline, sessions);
+    const now = new Date().toISOString();
 
     // ── Persist updates ────────────────────────────────────────────────────────
-    await db
-      .insert(userProgress)
-      .values({
-        userId,
-        totalXp: newTotalXp,
-        streakDays: newStreakDays,
-        lastPracticeDate: newLastPracticeDate,
-        skillMap: newSkillMap,
-      })
-      .onConflictDoUpdate({
-        target: userProgress.userId,
-        set: {
+    await Promise.all([
+      db
+        .insert(userXp)
+        .values({
+          userId,
           totalXp: newTotalXp,
           streakDays: newStreakDays,
           lastPracticeDate: newLastPracticeDate,
-          skillMap: newSkillMap,
-        },
-      });
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: userXp.userId,
+          set: {
+            totalXp: newTotalXp,
+            streakDays: newStreakDays,
+            lastPracticeDate: newLastPracticeDate,
+            updatedAt: now,
+          },
+        }),
+      db
+        .insert(skillMaps)
+        .values({ userId, skillMap: newSkillMap, updatedAt: now })
+        .onConflictDoUpdate({
+          target: skillMaps.userId,
+          set: { skillMap: newSkillMap, updatedAt: now },
+        }),
+    ]);
 
     res.json({
       ok: true,
@@ -375,8 +400,8 @@ router.put("/xp", async (req, res) => {
     const db = getDb();
     const [current] = await db
       .select()
-      .from(userProgress)
-      .where(eq(userProgress.userId, userId))
+      .from(userXp)
+      .where(eq(userXp.userId, userId))
       .limit(1);
 
     if (current && current.totalXp > 0) {
@@ -384,20 +409,23 @@ router.put("/xp", async (req, res) => {
       return res.json({ ok: false, reason: "server_has_data" });
     }
 
+    const now = new Date().toISOString();
     await db
-      .insert(userProgress)
+      .insert(userXp)
       .values({
         userId,
         totalXp: totalXp ?? 0,
         streakDays: streakDays ?? 0,
         lastPracticeDate: lastPracticeDate ?? null,
+        updatedAt: now,
       })
       .onConflictDoUpdate({
-        target: userProgress.userId,
+        target: userXp.userId,
         set: {
           totalXp: totalXp ?? 0,
           streakDays: streakDays ?? 0,
           lastPracticeDate: lastPracticeDate ?? null,
+          updatedAt: now,
         },
       });
 
