@@ -168,6 +168,9 @@ export function AppProvider({
   const [streakDays, setStreakDays] = useState(0);
   const [totalXP, setTotalXP] = useState(0);
   const [storageLoading, setStorageLoading] = useState(true);
+  // True while /api/me hydration is in-flight for a signed-in user.
+  // Prevents routing decisions before the server profile/history is applied.
+  const [isHydrating, setIsHydrating] = useState(false);
 
   const baselineRef = useRef<SkillMap | null>(null);
 
@@ -176,7 +179,7 @@ export function AppProvider({
   // NOT trigger clearAll() — local guest progress is preserved until first sign-in.
   const prevUserIdRef = useRef<string | null>(null);
 
-  const isLoading = storageLoading || !isAuthLoaded;
+  const isLoading = storageLoading || !isAuthLoaded || isHydrating;
 
   useEffect(() => {
     baselineRef.current = baselineSkillMap;
@@ -210,15 +213,14 @@ export function AppProvider({
       return;
     }
 
-    if (prevUserId !== null) {
-      // Different user on same device — clear old data, then hydrate fresh.
-      // Do NOT migrate local data (it belongs to the previous user).
-      clearAll().then(() => hydrateFromServer(false));
-    } else {
-      // Fresh sign-in (prevUserId was null = no prior user) — hydrate + offer migration.
-      // Local state is the user's guest progress that should be pushed to server if server is empty.
-      hydrateFromServer(true);
-    }
+    setIsHydrating(true);
+
+    const doHydrate: Promise<void> =
+      prevUserId !== null
+        ? clearAll().then(() => hydrateFromServer(false))
+        : hydrateFromServer(true);
+
+    doHydrate.finally(() => setIsHydrating(false));
   }, [userId, isAuthLoaded, storageLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Storage helpers ─────────────────────────────────────────────────────────

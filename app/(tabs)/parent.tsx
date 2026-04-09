@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp, type SessionResult, type SkillMap } from "@/context/AppContext";
+import { useAuth } from "@clerk/clerk-expo";
 
 // Total questions available per grade in the practice bank
 const QUESTIONS_BY_GRADE: Record<string, number> = { P4: 81, P5: 74, P6: 51 };
@@ -107,6 +108,7 @@ export default function ParentDashboard() {
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const { profile, sessions, streakDays, totalXP, skillMap } = useApp();
+  const { signOut } = useAuth();
   const [copied, setCopied] = useState(false);
 
   const level = Math.floor(totalXP / 500) + 1;
@@ -381,6 +383,21 @@ export default function ParentDashboard() {
           </Text>
         </>
       )}
+
+      {/* ── Account section ── */}
+      <View style={styles.accountSection}>
+        <TouchableOpacity
+          style={styles.signOutBtn}
+          onPress={() => { Haptics.selectionAsync(); signOut(); }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="log-out-outline" size={18} color={Colors.light.rust} />
+          <Text style={styles.signOutTxt}>Sign Out / Switch Account</Text>
+        </TouchableOpacity>
+        <Text style={styles.signOutNote}>
+          Two children can share one device by signing into their own accounts
+        </Text>
+      </View>
     </ScrollView>
   );
 }
@@ -478,5 +495,18 @@ const styles = StyleSheet.create({
   shareNote: {
     fontFamily: "Inter_400Regular", fontSize: 12,
     color: Colors.light.textSecondary, textAlign: "center", marginTop: -8,
+  },
+
+  accountSection: { gap: 10, paddingTop: 8 },
+  signOutBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    borderWidth: 2, borderColor: Colors.light.rust + "40",
+    borderRadius: 16, paddingVertical: 16,
+    backgroundColor: Colors.light.rust + "08",
+  },
+  signOutTxt: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: Colors.light.rust },
+  signOutNote: {
+    fontFamily: "Inter_400Regular", fontSize: 12,
+    color: Colors.light.textSecondary, textAlign: "center", lineHeight: 18,
   },
 });
