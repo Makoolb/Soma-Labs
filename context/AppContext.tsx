@@ -172,8 +172,9 @@ export function AppProvider({
   const baselineRef = useRef<SkillMap | null>(null);
 
   // Tracks the userId from the previous effect run to detect user changes.
-  // Starts as undefined so first run can distinguish "initial" from "no user".
-  const prevUserIdRef = useRef<string | null | undefined>(undefined);
+  // Starts as null (same as "signed out") so the initial signed-out state does
+  // NOT trigger clearAll() — local guest progress is preserved until first sign-in.
+  const prevUserIdRef = useRef<string | null>(null);
 
   const isLoading = storageLoading || !isAuthLoaded;
 
@@ -209,12 +210,13 @@ export function AppProvider({
       return;
     }
 
-    if (prevUserId !== null && prevUserId !== undefined) {
+    if (prevUserId !== null) {
       // Different user on same device — clear old data, then hydrate fresh.
       // Do NOT migrate local data (it belongs to the previous user).
       clearAll().then(() => hydrateFromServer(false));
     } else {
-      // Fresh sign-in (prev was null or undefined) — hydrate + offer migration.
+      // Fresh sign-in (prevUserId was null = no prior user) — hydrate + offer migration.
+      // Local state is the user's guest progress that should be pushed to server if server is empty.
       hydrateFromServer(true);
     }
   }, [userId, isAuthLoaded, storageLoading]); // eslint-disable-line react-hooks/exhaustive-deps

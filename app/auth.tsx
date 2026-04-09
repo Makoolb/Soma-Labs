@@ -15,14 +15,18 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { useApp } from "@/context/AppContext";
 
 type AuthMethod = "phone" | "google" | "apple";
-type PhoneStep = "enter" | "verify";
+type PhoneStep = "enter" | "verify" | "profile";
 
 type ClerkError = { code?: string; longMessage?: string; message?: string };
 type ClerkErrorResponse = { errors?: ClerkError[] };
 
 type PhoneCodeFactor = { strategy: "phone_code"; phoneNumberId: string };
+
+const GRADES = ["P4", "P5", "P6"] as const;
+type Grade = typeof GRADES[number];
 
 function extractErrorMessage(err: unknown): string {
   const e = err as ClerkErrorResponse;
@@ -48,12 +52,19 @@ export default function AuthScreen() {
   const { signUp, isLoaded: signUpLoaded, setActive: setSignUpActive } = useSignUp();
   const { startOAuthFlow: startGoogle } = useOAuth({ strategy: "oauth_google" });
   const { startOAuthFlow: startApple } = useOAuth({ strategy: "oauth_apple" });
+  const { saveProfile } = useApp();
 
   const [method, setMethod] = useState<AuthMethod>("phone");
   const [phoneStep, setPhoneStep] = useState<PhoneStep>("enter");
   const [countryIdx, setCountryIdx] = useState(0);
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
+
+  // Profile collection (sign-up only)
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserGrade, setNewUserGrade] = useState<Grade | null>(null);
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingVerification, setPendingVerification] = useState<"signIn" | "signUp" | null>(null);
@@ -116,12 +127,33 @@ export default function AuthScreen() {
           router.replace("/");
         }
       } else {
+        // Sign-up: collect name + grade before activating session
         const result = await signUp!.attemptPhoneNumberVerification({ code });
-        if (result.status === "complete") {
-          await setSignUpActive!({ session: result.createdSessionId });
-          router.replace("/");
+        if (result.status === "complete" && result.createdSessionId) {
+          setPendingSessionId(result.createdSessionId);
+          setPhoneStep("profile");
         }
       }
+    } catch (err: unknown) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCompleteProfile() {
+    if (!newUserName.trim() || !newUserGrade || !pendingSessionId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await saveProfile({
+        name: newUserName.trim(),
+        grade: newUserGrade,
+        subject: "Both",
+        createdAt: new Date().toISOString(),
+      });
+      await setSignUpActive!({ session: pendingSessionId });
+      router.replace("/");
     } catch (err: unknown) {
       setError(extractErrorMessage(err));
     } finally {
@@ -179,31 +211,37 @@ export default function AuthScreen() {
           <Ionicons name="school" size={44} color="#fff" />
         </View>
         <Text style={styles.appName}>SabiLab</Text>
-        <Text style={styles.tagline}>Sign in to save your progress across devices</Text>
+        <Text style={styles.tagline}>
+          {phoneStep === "profile"
+            ? "One last step — set up your profile"
+            : "Sign in to save your progress across devices"}
+        </Text>
       </View>
 
       {/* Card */}
       <View style={styles.card}>
-        {/* Method Tabs */}
-        <View style={styles.tabs}>
-          {tabs.map((tab) => (
-            <TouchableOpacity
-              key={tab.id}
-              style={[styles.tab, method === tab.id && styles.tabActive]}
-              onPress={() => switchMethod(tab.id)}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name={tab.icon as React.ComponentProps<typeof Ionicons>["name"]}
-                size={15}
-                color={method === tab.id ? "#fff" : Colors.light.textSecondary}
-              />
-              <Text style={[styles.tabTxt, method === tab.id && styles.tabTxtActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* Method Tabs — hidden during profile step */}
+        {phoneStep !== "profile" && (
+          <View style={styles.tabs}>
+            {tabs.map((tab) => (
+              <TouchableOpacity
+                key={tab.id}
+                style={[styles.tab, method === tab.id && styles.tabActive]}
+                onPress={() => switchMethod(tab.id)}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={tab.icon as React.ComponentProps<typeof Ionicons>["name"]}
+                  size={15}
+                  color={method === tab.id ? "#fff" : Colors.light.textSecondary}
+                />
+                <Text style={[styles.tabTxt, method === tab.id && styles.tabTxtActive]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {/* Error banner */}
         {error ? (
@@ -288,8 +326,49 @@ export default function AuthScreen() {
           </View>
         )}
 
+        {/* ── Phone sign-up: profile step ── */}
+        {method === "phone" && phoneStep === "profile" && (
+          <View style={styles.form}>
+            <Text style={styles.fieldLabel}>Your Name</Text>
+            <TextInput
+              style={styles.phoneInput}
+              placeholder="e.g. Emeka Chukwu"
+              placeholderTextColor={Colors.light.textTertiary}
+              value={newUserName}
+              onChangeText={setNewUserName}
+              autoFocus
+              autoCapitalize="words"
+            />
+            <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Your Class</Text>
+            <View style={styles.gradeRow}>
+              {GRADES.map((g) => (
+                <TouchableOpacity
+                  key={g}
+                  style={[styles.gradeBtn, newUserGrade === g && styles.gradeBtnActive]}
+                  onPress={() => { Haptics.selectionAsync(); setNewUserGrade(g); }}
+                >
+                  <Text style={[styles.gradeBtnTxt, newUserGrade === g && styles.gradeBtnTxtActive]}>
+                    {g}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.hint}>You can change these later in your profile</Text>
+            <TouchableOpacity
+              style={[styles.primaryBtn, (!newUserName.trim() || !newUserGrade || loading) && styles.btnDisabled]}
+              onPress={handleCompleteProfile}
+              disabled={!newUserName.trim() || !newUserGrade || loading}
+            >
+              {loading
+                ? <ActivityIndicator color="#fff" />
+                : <><Text style={styles.primaryBtnTxt}>Start Learning</Text><Ionicons name="arrow-forward" size={18} color="#fff" /></>
+              }
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* ── Google ── */}
-        {method === "google" && (
+        {method === "google" && phoneStep !== "profile" && (
           <View style={styles.form}>
             <Text style={styles.hint}>Use your Google account to sign in or create a SabiLab account</Text>
             <TouchableOpacity
@@ -306,7 +385,7 @@ export default function AuthScreen() {
         )}
 
         {/* ── Apple (iOS only) ── */}
-        {method === "apple" && Platform.OS === "ios" && (
+        {method === "apple" && Platform.OS === "ios" && phoneStep !== "profile" && (
           <View style={styles.form}>
             <Text style={styles.hint}>Use your Apple ID to sign in or create a SabiLab account</Text>
             <TouchableOpacity
@@ -387,6 +466,17 @@ const styles = StyleSheet.create({
 
   backRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   backTxt: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: Colors.light.navy },
+
+  gradeRow: { flexDirection: "row", gap: 10 },
+  gradeBtn: {
+    flex: 1, height: 52, borderRadius: 14,
+    backgroundColor: Colors.light.card,
+    borderWidth: 2, borderColor: Colors.light.border,
+    justifyContent: "center", alignItems: "center",
+  },
+  gradeBtnActive: { backgroundColor: Colors.light.navy, borderColor: Colors.light.navy },
+  gradeBtnTxt: { fontFamily: "Inter_700Bold", fontSize: 18, color: Colors.light.textSecondary },
+  gradeBtnTxtActive: { color: "#fff" },
 
   primaryBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
