@@ -459,11 +459,13 @@ export function AppProvider({
    *  1. Profile, diagnostic, and skill-map are independent → run in parallel.
    *  2. Sessions are uploaded SEQUENTIALLY (oldest-first) to prevent concurrent
    *     XP/streak mutations from racing and overwriting each other on the server.
-   *  3. After all sessions are stored, a force-write of XP/streak is sent so the
-   *     authoritative local streak (built over time) replaces the server's
-   *     "all sessions uploaded today" approximation.
+   *  3. POST /api/me/recompute is called — the server recomputes XP, streak, and
+   *     skill-map from its own stored data (no client values accepted), producing
+   *     a tamper-proof authoritative result. Client state is updated from the
+   *     response so the UI reflects the correct post-migration values.
    *
-   * Does NOT modify local React state.
+   * Does NOT accept client-provided XP or streak values — the server is the
+   * sole authority after phase 3.
    */
   async function migrateLocalToServer() {
     // ── Phase 1: independent writes (parallel) ────────────────────────────────
@@ -486,8 +488,8 @@ export function AppProvider({
 
     // ── Phase 2: sessions (sequential, oldest-first) ──────────────────────────
     // Sequential upload prevents concurrent server XP/streak mutations from
-    // racing. Oldest-first ensures the server's per-session streak logic
-    // accumulates in chronological order.
+    // racing. Oldest-first ordering matches the chronological intent of the
+    // server's per-session streak computation.
     const ordered = [...sessions].sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
@@ -495,19 +497,30 @@ export function AppProvider({
       await syncPost("/api/me/sessions", { ...s, xpEarned: s.score * 10 + 20 });
     }
 
-    // ── Phase 3: force-authoritative XP/streak ────────────────────────────────
-    // Per-session uploads computed streaks using today's date, which inflates
-    // or deflates the running streak for historical data. Override with the
-    // local values (source of truth) using force=true so the server reflects
-    // the real streak the student earned.
-    if (totalXP > 0 || streakDays > 0) {
-      const lastDate = await AsyncStorage.getItem(KEYS.LAST_PRACTICE).catch(() => null);
-      await syncPut("/api/me/xp", {
-        totalXp: totalXP,
-        streakDays,
-        lastPracticeDate: lastDate,
-        force: true,
-      });
+    // ── Phase 3: server-side recomputation ────────────────────────────────────
+    // The server recomputes XP (sum of stored xp_earned) and streak (consecutive
+    // days from actual session dates) with no client input accepted. This corrects
+    // any date-based approximation from Phase 2 and avoids the client-override
+    // security concern. The authoritative values are returned and applied locally.
+    const result = await syncPostWithResponse<{
+      ok: boolean;
+      totalXp?: number;
+      streakDays?: number;
+      lastPracticeDate?: string | null;
+    }>("/api/me/recompute", {});
+
+    if (result?.ok) {
+      if (result.totalXp !== undefined) {
+        setTotalXP(result.totalXp);
+        await AsyncStorage.setItem(KEYS.XP, String(result.totalXp)).catch(() => undefined);
+      }
+      if (result.streakDays !== undefined) {
+        setStreakDays(result.streakDays);
+        await AsyncStorage.setItem(KEYS.STREAK, String(result.streakDays)).catch(() => undefined);
+      }
+      if (result.lastPracticeDate) {
+        await AsyncStorage.setItem(KEYS.LAST_PRACTICE, result.lastPracticeDate).catch(() => undefined);
+      }
     }
   }
 

@@ -429,65 +429,89 @@ router.post("/sessions", async (req, res) => {
   }
 });
 
-// ── PUT /api/me/xp ─────────────────────────────────────────────────────────────
-// Used ONLY during initial data migration (first sign-in with existing local data).
+// ── POST /api/me/recompute ────────────────────────────────────────────────────
+// Called after bulk session migration to recompute authoritative XP and streak
+// entirely from the server's stored session records — no client data accepted.
 //
-// When force=false (default): rejected if server already has XP, preventing
-// client-side tampering after normal use.
-// When force=true: always overwrites — used as the final step of migration to
-// restore the authoritative local streak/XP after sequential session uploads,
-// which use today's date and produce an approximated streak.
-router.put("/xp", async (req, res) => {
+// XP  = sum of xp_earned across all stored sessions.
+// Streak = consecutive-day count ending at the most recent session, using actual
+//          session dates (not today's upload timestamp), so historical uploads
+//          produce the correct streak.
+router.post("/recompute", async (req, res) => {
   try {
     const { userId } = getAuth(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-    const { totalXp, streakDays, lastPracticeDate, force } = req.body as {
-      totalXp?: number;
-      streakDays?: number;
-      lastPracticeDate?: string | null;
-      force?: boolean;
-    };
-
     const db = getDb();
+    const allSessions = await db
+      .select()
+      .from(practiceSessions)
+      .where(eq(practiceSessions.userId, userId));
 
-    if (!force) {
-      // Non-force path: only write if server has no XP (first-time account setup).
-      const [current] = await db
-        .select()
-        .from(userXp)
-        .where(eq(userXp.userId, userId))
-        .limit(1);
+    if (allSessions.length === 0) return res.json({ ok: true, totalXp: 0, streakDays: 0 });
 
-      if (current && current.totalXp > 0) {
-        // Server already has XP — reject to prevent accidental or malicious override.
-        return res.json({ ok: false, reason: "server_has_data" });
+    // ── XP: authoritative sum from stored sessions ────────────────────────────
+    const totalXp = allSessions.reduce((acc, s) => acc + (s.xpEarned ?? 0), 0);
+
+    // ── Streak: consecutive-day count from actual session dates ───────────────
+    // Deduplicate to day strings, sort descending (newest first).
+    const daySet = new Set(allSessions.map((s) => new Date(s.date).toDateString()));
+    const days = Array.from(daySet).sort(
+      (a, b) => new Date(b).getTime() - new Date(a).getTime()
+    );
+
+    const today = new Date().toDateString();
+    const yesterday = new Date(Date.now() - 86_400_000).toDateString();
+
+    // Streak is only "active" if the most recent session was today or yesterday.
+    let streakDays = 0;
+    if (days[0] === today || days[0] === yesterday) {
+      streakDays = 1;
+      for (let i = 1; i < days.length; i++) {
+        const prev = new Date(days[i - 1]);
+        const curr = new Date(days[i]);
+        const diffDays = Math.round((prev.getTime() - curr.getTime()) / 86_400_000);
+        if (diffDays === 1) {
+          streakDays++;
+        } else {
+          break; // Gap found — streak ends here.
+        }
       }
     }
 
-    const now = new Date().toISOString();
-    await db
-      .insert(userXp)
-      .values({
-        userId,
-        totalXp: totalXp ?? 0,
-        streakDays: streakDays ?? 0,
-        lastPracticeDate: lastPracticeDate ?? null,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: userXp.userId,
-        set: {
-          totalXp: totalXp ?? 0,
-          streakDays: streakDays ?? 0,
-          lastPracticeDate: lastPracticeDate ?? null,
-          updatedAt: now,
-        },
-      });
+    // Most recent session date becomes the authoritative lastPracticeDate.
+    const lastPracticeDate = new Date(
+      allSessions.reduce(
+        (latest, s) => (new Date(s.date) > new Date(latest) ? s.date : latest),
+        allSessions[0].date
+      )
+    ).toISOString();
 
-    res.json({ ok: true });
+    // ── Recompute blended skill map from session answers ──────────────────────
+    const { baselineSkillMap } = await readSkillMapForUser(db, userId);
+    const sessionData: SessionForBlend[] = allSessions.map((s) => ({
+      id: s.id,
+      date: s.date,
+      answers: (s.answers ?? []) as AnswerRecord[],
+    }));
+    const newSkillMap = blendSkillMap(baselineSkillMap, sessionData);
+
+    const now = new Date().toISOString();
+
+    await Promise.all([
+      db
+        .insert(userXp)
+        .values({ userId, totalXp, streakDays, lastPracticeDate, updatedAt: now })
+        .onConflictDoUpdate({
+          target: userXp.userId,
+          set: { totalXp, streakDays, lastPracticeDate, updatedAt: now },
+        }),
+      upsertSkillTopics(db, userId, newSkillMap, {}, false),
+    ]);
+
+    res.json({ ok: true, totalXp, streakDays, lastPracticeDate });
   } catch (e) {
-    console.error("PUT /api/me/xp error:", e);
+    console.error("POST /api/me/recompute error:", e);
     res.status(500).json({ error: "Internal server error" });
   }
 });
