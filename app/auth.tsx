@@ -15,7 +15,6 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useApp } from "@/context/AppContext";
 
 type AuthMode = "select" | "signup" | "signin";
 type SignupStep = "profile" | "method";
@@ -49,7 +48,6 @@ export default function AuthScreen() {
   const { signUp, isLoaded: signUpLoaded, setActive: setSignUpActive } = useSignUp();
   const { startOAuthFlow: startGoogle } = useOAuth({ strategy: "oauth_google" });
   const { startOAuthFlow: startApple } = useOAuth({ strategy: "oauth_apple" });
-  const { saveProfile } = useApp();
 
   // ── Navigation state ───────────────────────────────────────────────────────
   const [authMode, setAuthMode] = useState<AuthMode>("select");
@@ -148,16 +146,14 @@ export default function AuthScreen() {
       } else {
         const result = await signUp!.attemptPhoneNumberVerification({ code });
         if (result.status === "complete" && result.createdSessionId) {
-          // Save profile locally before activating session — profile was collected
-          // in the "profile" step before authentication, so we have name + grade.
-          await saveProfile({
-            name: newUserName.trim(),
-            grade: newUserGrade!,
-            subject: "Both",
-            createdAt: new Date().toISOString(),
-          });
+          // Activate session FIRST — profile is NOT saved here.
+          // Onboarding receives name+grade via URL params and calls saveProfile()
+          // so that isOnboarded only becomes true after the onboarding screen runs.
           await setSignUpActive!({ session: result.createdSessionId });
-          router.replace("/");
+          router.replace({
+            pathname: "/onboarding",
+            params: { name: newUserName.trim(), grade: newUserGrade! },
+          });
         }
       }
     } catch (err: unknown) {
@@ -174,16 +170,16 @@ export default function AuthScreen() {
     try {
       const { createdSessionId, setActive } = await startGoogle();
       if (createdSessionId && setActive) {
-        if (authMode === "signup") {
-          await saveProfile({
-            name: newUserName.trim(),
-            grade: newUserGrade!,
-            subject: "Both",
-            createdAt: new Date().toISOString(),
-          });
-        }
         await setActive({ session: createdSessionId });
-        router.replace("/");
+        if (authMode === "signup") {
+          // New sign-up: route through onboarding so profile is saved there.
+          router.replace({
+            pathname: "/onboarding",
+            params: { name: newUserName.trim(), grade: newUserGrade! },
+          });
+        } else {
+          router.replace("/");
+        }
       }
     } catch {
       setError("Google sign-in failed. Please try again.");
@@ -198,16 +194,16 @@ export default function AuthScreen() {
     try {
       const { createdSessionId, setActive } = await startApple();
       if (createdSessionId && setActive) {
-        if (authMode === "signup") {
-          await saveProfile({
-            name: newUserName.trim(),
-            grade: newUserGrade!,
-            subject: "Both",
-            createdAt: new Date().toISOString(),
-          });
-        }
         await setActive({ session: createdSessionId });
-        router.replace("/");
+        if (authMode === "signup") {
+          // New sign-up: route through onboarding so profile is saved there.
+          router.replace({
+            pathname: "/onboarding",
+            params: { name: newUserName.trim(), grade: newUserGrade! },
+          });
+        } else {
+          router.replace("/");
+        }
       }
     } catch {
       setError("Apple sign-in failed. Please try again.");

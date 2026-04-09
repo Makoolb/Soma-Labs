@@ -389,11 +389,9 @@ export function AppProvider({
             // Prompt the user before migrating — never merge data without consent.
             // MigrationPromptModal in _layout.tsx will call confirmMigration().
             setPendingMigration(true);
-          } else if (profile) {
-            // New user who filled profile in the sign-up flow but has no prior
-            // guest sessions — auto-sync profile silently (no prompt needed).
-            await migrateLocalToServer();
           }
+          // New user with no guest data — nothing to migrate.
+          // Onboarding calls saveProfile() once the user completes it.
         }
         // For user switch (shouldMigrate=false) server had no data — state was
         // already cleared by clearAll(); nothing more to do.

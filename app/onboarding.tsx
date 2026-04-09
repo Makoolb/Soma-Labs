@@ -10,7 +10,7 @@ import {
   Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
@@ -46,9 +46,14 @@ function defaultExamYear() {
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { saveProfile } = useApp();
+
+  // URL params may be pre-filled when coming from the sign-up auth flow,
+  // where the student entered name + grade BEFORE OTP verification.
+  const params = useLocalSearchParams<{ name?: string; grade?: string }>();
+
   const [step, setStep] = useState(0);
-  const [name, setName] = useState("");
-  const [grade, setGrade] = useState<Grade | null>(null);
+  const [name, setName] = useState(params.name ?? "");
+  const [grade, setGrade] = useState<Grade | null>((params.grade as Grade) ?? null);
   const [subject, setSubject] = useState<Subject | null>(null);
   const [examMonth, setExamMonth] = useState<number | null>(3);
   const [examYear, setExamYear] = useState(defaultExamYear);
@@ -77,7 +82,8 @@ export default function OnboardingScreen() {
         : undefined;
     await saveProfile({ name: name.trim() || "Student", grade, subject, examDate });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.replace("/diagnostic");
+    // Route back to index.tsx — it will redirect to /diagnostic since diagnosticDone=false.
+    router.replace("/");
   }
 
   const headerIcon =
