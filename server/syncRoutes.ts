@@ -142,7 +142,7 @@ router.get("/", async (req, res) => {
 
     res.json({
       profile: p
-        ? { name: p.name, grade: p.grade, subject: p.subject, examDate: p.examDate ?? undefined }
+        ? { name: p.name, grade: p.grade, subject: p.subject, examDate: p.examDate ?? undefined, createdAt: p.createdAt ?? undefined }
         : null,
       xp: xp
         ? { totalXp: xp.totalXp, streakDays: xp.streakDays, lastPracticeDate: xp.lastPracticeDate }

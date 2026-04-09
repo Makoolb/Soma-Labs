@@ -350,6 +350,7 @@ export function AppProvider({
       });
       if (!res.ok) throw new Error(`/api/me returned ${res.status}`);
 
+      setSyncError(null);
       const data = await res.json() as ServerUserData;
 
       if (!data.profile) {
