@@ -85,8 +85,8 @@ interface AppContextValue {
   streakDays: number;
   totalXP: number;
   isLoading: boolean;
-  /** True when a first-sign-in migration prompt is waiting for user confirmation. */
   pendingMigration: boolean;
+  syncError: string | null;
   saveProfile: (profile: StudentProfile) => Promise<void>;
   updateExamDate: (date: string | null) => Promise<void>;
   saveDiagnosticResult: (result: DiagnosticResult) => Promise<void>;
@@ -111,11 +111,7 @@ const KEYS = {
   LAST_PRACTICE: "@somalabs/lastPractice",
 } as const;
 
-/**
- * Blends diagnostic baseline scores with first-attempt practice accuracy.
- * practiceWeight = min(0.7, firstAttemptCount / 14)  — caps at 70% influence.
- * Topics not in the baseline are added at their raw practice accuracy.
- */
+// practiceWeight = min(0.7, firstAttemptCount / 14); mirrors server-side blend.
 function blendSkillMap(baseline: SkillMap, sessions: SessionResult[]): SkillMap {
   const sorted = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const seen = new Set<string>();
@@ -172,18 +168,12 @@ export function AppProvider({
   const [streakDays, setStreakDays] = useState(0);
   const [totalXP, setTotalXP] = useState(0);
   const [storageLoading, setStorageLoading] = useState(true);
-  // True while /api/me hydration is in-flight for a signed-in user.
-  // Prevents routing decisions before the server profile/history is applied.
   const [isHydrating, setIsHydrating] = useState(false);
-  // True when the app found local guest data on first sign-in and is waiting
-  // for the user to decide whether to transfer it to the new account.
   const [pendingMigration, setPendingMigration] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const baselineRef = useRef<SkillMap | null>(null);
-
-  // Tracks the userId from the previous effect run to detect user changes.
-  // Starts as null (same as "signed out") so the initial signed-out state does
-  // NOT trigger clearAll() — local guest progress is preserved until first sign-in.
+  // null = "signed out" so initial state never triggers clearAll on mount
   const prevUserIdRef = useRef<string | null>(null);
 
   const isLoading = storageLoading || !isAuthLoaded || isHydrating || pendingMigration;
@@ -197,25 +187,17 @@ export function AppProvider({
     loadFromStorage();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /**
-   * Detect user identity changes and react:
-   *  - Signed out (userId null): clear all state + storage.
-   *  - User switched: clear all state + storage, then hydrate from server (no migration).
-   *  - Fresh sign-in (prevUser was null): hydrate + migrate local data if server is empty.
-   * Runs only after both auth and storage are fully loaded.
-   */
+  // Detect user identity changes: sign-out clears state; sign-in hydrates from server.
   useEffect(() => {
     if (!isAuthLoaded || storageLoading) return;
 
     const newUserId = userId ?? null;
     const prevUserId = prevUserIdRef.current;
 
-    // No change — skip.
     if (prevUserId === newUserId) return;
     prevUserIdRef.current = newUserId;
 
     if (newUserId === null) {
-      // User signed out — wipe everything.
       clearAll();
       return;
     }
@@ -227,7 +209,7 @@ export function AppProvider({
         ? clearAll().then(() => hydrateFromServer(false))
         : hydrateFromServer(true);
 
-    doHydrate.finally(() => setIsHydrating(false));
+    doHydrate.catch(() => undefined).finally(() => setIsHydrating(false));
   }, [userId, isAuthLoaded, storageLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Storage helpers ─────────────────────────────────────────────────────────
@@ -357,13 +339,6 @@ export function AppProvider({
 
   // ── Server hydration ────────────────────────────────────────────────────────
 
-  /**
-   * Hydrates app state from the server for the currently signed-in user.
-   *
-   * @param shouldMigrate  When true and the server has no data, push all local
-   *                       state to the server (first-time sign-in migration).
-   *                       When false (user switch), skip migration entirely.
-   */
   async function hydrateFromServer(shouldMigrate: boolean) {
     try {
       const base = getBase();
@@ -373,32 +348,18 @@ export function AppProvider({
       const res = await fetch(new URL("/api/me", base).toString(), {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) return;
+      if (!res.ok) throw new Error(`/api/me returned ${res.status}`);
 
       const data = await res.json() as ServerUserData;
 
       if (!data.profile) {
-        // Server has no data for this account.
         if (shouldMigrate) {
-          // Check for meaningful guest data (sessions / XP / diagnostic) that
-          // existed BEFORE this sign-up. A profile alone is NOT considered guest
-          // data — it may have been saved from the sign-up flow itself and should
-          // be auto-synced without prompting the user.
           const hasGuestData = sessions.length > 0 || totalXP > 0 || diagnosticResult !== null;
-          if (hasGuestData) {
-            // Prompt the user before migrating — never merge data without consent.
-            // MigrationPromptModal in _layout.tsx will call confirmMigration().
-            setPendingMigration(true);
-          }
-          // New user with no guest data — nothing to migrate.
-          // Onboarding calls saveProfile() once the user completes it.
+          if (hasGuestData) setPendingMigration(true);
         }
-        // For user switch (shouldMigrate=false) server had no data — state was
-        // already cleared by clearAll(); nothing more to do.
         return;
       }
 
-      // Server has data — overwrite local state entirely.
       const serverProfile: StudentProfile = data.profile;
       setProfile(serverProfile);
       await AsyncStorage.setItem(KEYS.PROFILE, JSON.stringify(serverProfile));
@@ -447,28 +408,18 @@ export function AppProvider({
         await AsyncStorage.removeItem(KEYS.LAST_PRACTICE);
       }
     } catch (e) {
-      console.log("hydrateFromServer failed:", e);
+      const msg = e instanceof Error ? e.message : "Sync failed";
+      console.warn("hydrateFromServer failed:", e);
+      setSyncError(msg);
+      throw e;
     }
   }
 
-  /**
-   * Pushes all local data to the server in a safe, deterministic order.
-   * Called only on first sign-in when the server account is empty.
-   *
-   * Order matters:
-   *  1. Profile, diagnostic, and skill-map are independent → run in parallel.
-   *  2. Sessions are uploaded SEQUENTIALLY (oldest-first) to prevent concurrent
-   *     XP/streak mutations from racing and overwriting each other on the server.
-   *  3. POST /api/me/recompute is called — the server recomputes XP, streak, and
-   *     skill-map from its own stored data (no client values accepted), producing
-   *     a tamper-proof authoritative result. Client state is updated from the
-   *     response so the UI reflects the correct post-migration values.
-   *
-   * Does NOT accept client-provided XP or streak values — the server is the
-   * sole authority after phase 3.
-   */
+  // Pushes local guest data to the server in order:
+  //  1. parallel independent writes (profile, diagnostic, skill-map)
+  //  2. sessions sequentially oldest-first
+  //  3. server recompute for authoritative XP/streak
   async function migrateLocalToServer() {
-    // ── Phase 1: independent writes (parallel) ────────────────────────────────
     const phase1: Promise<unknown>[] = [];
 
     if (profile) {
@@ -486,10 +437,6 @@ export function AppProvider({
 
     await Promise.all(phase1);
 
-    // ── Phase 2: sessions (sequential, oldest-first) ──────────────────────────
-    // Sequential upload prevents concurrent server XP/streak mutations from
-    // racing. Oldest-first ordering matches the chronological intent of the
-    // server's per-session streak computation.
     const ordered = [...sessions].sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
@@ -497,11 +444,6 @@ export function AppProvider({
       await syncPost("/api/me/sessions", { ...s, xpEarned: s.score * 10 + 20 });
     }
 
-    // ── Phase 3: server-side recomputation ────────────────────────────────────
-    // The server recomputes XP (sum of stored xp_earned) and streak (consecutive
-    // days from actual session dates) with no client input accepted. This corrects
-    // any date-based approximation from Phase 2 and avoids the client-override
-    // security concern. The authoritative values are returned and applied locally.
     const result = await syncPostWithResponse<{
       ok: boolean;
       totalXp?: number;
@@ -599,16 +541,11 @@ export function AppProvider({
         const blended = blendSkillMap(baseline, updated);
         setSkillMap(blended);
         AsyncStorage.setItem(KEYS.SKILL_MAP, JSON.stringify(blended)).catch(() => undefined);
-        // Do NOT call PUT /api/me/skillmap here — that endpoint is for the
-        // diagnostic baseline and would overwrite baseline_score with the blended
-        // value. POST /api/me/sessions (below) recomputes the blended map
-        // server-side and returns the authoritative skill-map in its response.
       }
       return updated;
     });
 
-    // Server-authoritative XP/streak/skillMap: reconcile from server response.
-    // (Fire-and-update — does not block the UI.)
+    // Fire-and-update: sync session, then reconcile XP/streak/skillMap from server response.
     syncPostWithResponse<SessionSyncResponse>("/api/me/sessions", {
       ...full,
       xpEarned: xpGained,
@@ -621,7 +558,6 @@ export function AppProvider({
         if (resp.lastPracticeDate) {
           AsyncStorage.setItem(KEYS.LAST_PRACTICE, resp.lastPracticeDate).catch(() => undefined);
         }
-        // Reconcile skill map with server's authoritative blend.
         if (resp.skillMap && Object.keys(resp.skillMap).length > 0) {
           setSkillMap(resp.skillMap);
           AsyncStorage.setItem(KEYS.SKILL_MAP, JSON.stringify(resp.skillMap)).catch(() => undefined);
@@ -634,11 +570,6 @@ export function AppProvider({
     await clearAll();
   }
 
-  /**
-   * Called by the MigrationPromptModal after the user decides.
-   * accept=true  → push all local data to the server, keep local state.
-   * accept=false → discard local data; user starts fresh on this account.
-   */
   async function confirmMigration(accept: boolean) {
     setPendingMigration(false);
     if (accept) {
@@ -662,6 +593,7 @@ export function AppProvider({
       totalXP,
       isLoading,
       pendingMigration,
+      syncError,
       saveProfile,
       updateExamDate,
       saveDiagnosticResult,
@@ -672,7 +604,7 @@ export function AppProvider({
       confirmMigration,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [profile, isSignedIn, diagnosticResult, skillMap, skillMapReady, sessions, streakDays, totalXP, isLoading, pendingMigration]
+    [profile, isSignedIn, diagnosticResult, skillMap, skillMapReady, sessions, streakDays, totalXP, isLoading, pendingMigration, syncError]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

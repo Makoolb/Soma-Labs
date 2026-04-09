@@ -32,11 +32,7 @@ interface SessionForBlend {
   answers: AnswerRecord[];
 }
 
-/**
- * Blends a baseline skill map with first-attempt practice accuracy across all sessions.
- * Identical algorithm to the client-side blendSkillMap in context/AppContext.tsx.
- * practiceWeight = min(0.7, firstAttemptCount / 14) — caps at 70% influence.
- */
+// Mirrors the client-side blendSkillMap — practiceWeight = min(0.7, firstAttemptCount / 14).
 function blendSkillMap(baseline: SkillMap, sessions: SessionForBlend[]): SkillMap {
   const sorted = [...sessions].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
@@ -69,9 +65,6 @@ function blendSkillMap(baseline: SkillMap, sessions: SessionForBlend[]): SkillMa
   return blended;
 }
 
-/**
- * Reads skill_maps rows for a user and returns {skillMap, baselineSkillMap} objects.
- */
 async function readSkillMapForUser(
   db: ReturnType<typeof getDb>,
   userId: string
@@ -88,11 +81,6 @@ async function readSkillMapForUser(
   return { skillMap, baselineSkillMap };
 }
 
-/**
- * Upserts per-topic skill_map rows. When updatingBaseline=true, both score and
- * baseline_score are written (used after diagnostic). When false, only score is
- * written (used after practice sessions — baseline never changes).
- */
 async function upsertSkillTopics(
   db: ReturnType<typeof getDb>,
   userId: string,
@@ -301,8 +289,6 @@ router.put("/skillmap", async (req, res) => {
 });
 
 // ── POST /api/me/sessions ─────────────────────────────────────────────────────
-// Idempotent: skips XP/streak/skill-map update if session already exists.
-// Server-authoritative: computes XP, streak, and full skill-map blend.
 router.post("/sessions", async (req, res) => {
   try {
     const { userId } = getAuth(req);
@@ -377,7 +363,6 @@ router.post("/sessions", async (req, res) => {
       newLastPracticeDate = new Date().toISOString();
     }
 
-    // ── Recompute full skill-map blend from all sessions ───────────────────────
     const allSessionRows = await db
       .select()
       .from(practiceSessions)
@@ -392,7 +377,6 @@ router.post("/sessions", async (req, res) => {
     const newSkillMap = blendSkillMap(baselineSkillMap, sessions);
     const now = new Date().toISOString();
 
-    // ── Persist updates (score only, baseline unchanged) ──────────────────────
     await Promise.all([
       db
         .insert(userXp)
@@ -430,13 +414,7 @@ router.post("/sessions", async (req, res) => {
 });
 
 // ── POST /api/me/recompute ────────────────────────────────────────────────────
-// Called after bulk session migration to recompute authoritative XP and streak
-// entirely from the server's stored session records — no client data accepted.
-//
-// XP  = sum of xp_earned across all stored sessions.
-// Streak = consecutive-day count ending at the most recent session, using actual
-//          session dates (not today's upload timestamp), so historical uploads
-//          produce the correct streak.
+// Recomputes XP, streak, and skill-map from stored server data — no client values accepted.
 router.post("/recompute", async (req, res) => {
   try {
     const { userId } = getAuth(req);
@@ -450,11 +428,8 @@ router.post("/recompute", async (req, res) => {
 
     if (allSessions.length === 0) return res.json({ ok: true, totalXp: 0, streakDays: 0 });
 
-    // ── XP: authoritative sum from stored sessions ────────────────────────────
     const totalXp = allSessions.reduce((acc, s) => acc + (s.xpEarned ?? 0), 0);
 
-    // ── Streak: consecutive-day count from actual session dates ───────────────
-    // Deduplicate to day strings, sort descending (newest first).
     const daySet = new Set(allSessions.map((s) => new Date(s.date).toDateString()));
     const days = Array.from(daySet).sort(
       (a, b) => new Date(b).getTime() - new Date(a).getTime()
@@ -463,7 +438,6 @@ router.post("/recompute", async (req, res) => {
     const today = new Date().toDateString();
     const yesterday = new Date(Date.now() - 86_400_000).toDateString();
 
-    // Streak is only "active" if the most recent session was today or yesterday.
     let streakDays = 0;
     if (days[0] === today || days[0] === yesterday) {
       streakDays = 1;
@@ -474,12 +448,11 @@ router.post("/recompute", async (req, res) => {
         if (diffDays === 1) {
           streakDays++;
         } else {
-          break; // Gap found — streak ends here.
+          break;
         }
       }
     }
 
-    // Most recent session date becomes the authoritative lastPracticeDate.
     const lastPracticeDate = new Date(
       allSessions.reduce(
         (latest, s) => (new Date(s.date) > new Date(latest) ? s.date : latest),
@@ -487,7 +460,6 @@ router.post("/recompute", async (req, res) => {
       )
     ).toISOString();
 
-    // ── Recompute blended skill map from session answers ──────────────────────
     const { baselineSkillMap } = await readSkillMapForUser(db, userId);
     const sessionData: SessionForBlend[] = allSessions.map((s) => ({
       id: s.id,

@@ -12,6 +12,7 @@ import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { View, Text, StyleSheet, Modal, TouchableOpacity } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
@@ -52,11 +53,6 @@ function RootLayoutNav() {
   );
 }
 
-/**
- * Centralized auth guard. Redirects any unauthenticated user to /auth when they
- * attempt to access any route other than /auth itself.
- * Runs via useEffect so it fires after navigation context is available.
- */
 function AuthGuard() {
   const { isSignedIn, isLoading } = useApp();
   const segments = useSegments();
@@ -73,10 +69,6 @@ function AuthGuard() {
   return null;
 }
 
-/**
- * Shown when the user signs in for the first time on a device that already has
- * local guest progress. Asks whether to transfer that data to the new account.
- */
 function MigrationPromptModal() {
   const { pendingMigration, confirmMigration } = useApp();
   return (
@@ -111,6 +103,18 @@ function MigrationPromptModal() {
   );
 }
 
+function SyncErrorBanner() {
+  const { syncError } = useApp();
+  const insets = useSafeAreaInsets();
+  if (!syncError) return null;
+  return (
+    <View style={[syncBannerStyles.bar, { paddingTop: insets.top + 8 }]}>
+      <Ionicons name="cloud-offline-outline" size={14} color="#fff" />
+      <Text style={syncBannerStyles.text}>Offline — changes saved locally</Text>
+    </View>
+  );
+}
+
 function AppContent() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -118,6 +122,7 @@ function AppContent() {
         <AuthGuard />
         <RootLayoutNav />
         <MigrationPromptModal />
+        <SyncErrorBanner />
       </KeyboardProvider>
     </GestureHandlerRootView>
   );
@@ -185,6 +190,16 @@ const migrStyles = StyleSheet.create({
     borderWidth: 2, borderColor: Colors.light.border,
   },
   declineTxt: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: Colors.light.textSecondary },
+});
+
+const syncBannerStyles = StyleSheet.create({
+  bar: {
+    position: "absolute", top: 0, left: 0, right: 0,
+    backgroundColor: Colors.light.rust,
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    paddingBottom: 8, paddingHorizontal: 16, gap: 6, zIndex: 999,
+  },
+  text: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: "#fff" },
 });
 
 const cfgStyles = StyleSheet.create({
