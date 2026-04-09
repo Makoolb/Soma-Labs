@@ -452,39 +452,63 @@ export function AppProvider({
   }
 
   /**
-   * Pushes all local data to the server.
+   * Pushes all local data to the server in a safe, deterministic order.
    * Called only on first sign-in when the server account is empty.
-   * Does NOT modify local state.
+   *
+   * Order matters:
+   *  1. Profile, diagnostic, and skill-map are independent → run in parallel.
+   *  2. Sessions are uploaded SEQUENTIALLY (oldest-first) to prevent concurrent
+   *     XP/streak mutations from racing and overwriting each other on the server.
+   *  3. After all sessions are stored, a force-write of XP/streak is sent so the
+   *     authoritative local streak (built over time) replaces the server's
+   *     "all sessions uploaded today" approximation.
+   *
+   * Does NOT modify local React state.
    */
   async function migrateLocalToServer() {
-    const tasks: Promise<unknown>[] = [];
+    // ── Phase 1: independent writes (parallel) ────────────────────────────────
+    const phase1: Promise<unknown>[] = [];
 
     if (profile) {
-      tasks.push(syncPut("/api/me/profile", profile));
+      phase1.push(syncPut("/api/me/profile", profile));
     }
     if (diagnosticResult) {
-      tasks.push(syncPut("/api/me/diagnostic", { diagnosticResult }));
+      phase1.push(syncPut("/api/me/diagnostic", { diagnosticResult }));
     }
     if (baselineRef.current) {
-      tasks.push(syncPut("/api/me/skillmap", {
+      phase1.push(syncPut("/api/me/skillmap", {
         skillMap: skillMap ?? baselineRef.current,
         baselineSkillMap: baselineRef.current,
       }));
     }
-    if (totalXP > 0 || streakDays > 0) {
-      tasks.push(syncPut("/api/me/xp", {
-        totalXp: totalXP,
-        streakDays,
-        lastPracticeDate: null,
-      }));
-    }
-    // Push all local sessions individually (server de-dupes via idempotent POST).
-    // Local sessions are already capped at 100 by the app, so this is bounded.
-    for (const s of sessions) {
-      tasks.push(syncPost("/api/me/sessions", { ...s, xpEarned: s.score * 10 + 20 }));
+
+    await Promise.all(phase1);
+
+    // ── Phase 2: sessions (sequential, oldest-first) ──────────────────────────
+    // Sequential upload prevents concurrent server XP/streak mutations from
+    // racing. Oldest-first ensures the server's per-session streak logic
+    // accumulates in chronological order.
+    const ordered = [...sessions].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+    for (const s of ordered) {
+      await syncPost("/api/me/sessions", { ...s, xpEarned: s.score * 10 + 20 });
     }
 
-    await Promise.all(tasks);
+    // ── Phase 3: force-authoritative XP/streak ────────────────────────────────
+    // Per-session uploads computed streaks using today's date, which inflates
+    // or deflates the running streak for historical data. Override with the
+    // local values (source of truth) using force=true so the server reflects
+    // the real streak the student earned.
+    if (totalXP > 0 || streakDays > 0) {
+      const lastDate = await AsyncStorage.getItem(KEYS.LAST_PRACTICE).catch(() => null);
+      await syncPut("/api/me/xp", {
+        totalXp: totalXP,
+        streakDays,
+        lastPracticeDate: lastDate,
+        force: true,
+      });
+    }
   }
 
   // ── Public actions ───────────────────────────────────────────────────────────

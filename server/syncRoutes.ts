@@ -431,28 +431,38 @@ router.post("/sessions", async (req, res) => {
 
 // ── PUT /api/me/xp ─────────────────────────────────────────────────────────────
 // Used ONLY during initial data migration (first sign-in with existing local data).
-// Rejected if server already has XP data to prevent client-side tampering.
+//
+// When force=false (default): rejected if server already has XP, preventing
+// client-side tampering after normal use.
+// When force=true: always overwrites — used as the final step of migration to
+// restore the authoritative local streak/XP after sequential session uploads,
+// which use today's date and produce an approximated streak.
 router.put("/xp", async (req, res) => {
   try {
     const { userId } = getAuth(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-    const { totalXp, streakDays, lastPracticeDate } = req.body as {
+    const { totalXp, streakDays, lastPracticeDate, force } = req.body as {
       totalXp?: number;
       streakDays?: number;
       lastPracticeDate?: string | null;
+      force?: boolean;
     };
 
     const db = getDb();
-    const [current] = await db
-      .select()
-      .from(userXp)
-      .where(eq(userXp.userId, userId))
-      .limit(1);
 
-    if (current && current.totalXp > 0) {
-      // Server already has XP — reject client override to prevent tampering.
-      return res.json({ ok: false, reason: "server_has_data" });
+    if (!force) {
+      // Non-force path: only write if server has no XP (first-time account setup).
+      const [current] = await db
+        .select()
+        .from(userXp)
+        .where(eq(userXp.userId, userId))
+        .limit(1);
+
+      if (current && current.totalXp > 0) {
+        // Server already has XP — reject to prevent accidental or malicious override.
+        return res.json({ ok: false, reason: "server_has_data" });
+      }
     }
 
     const now = new Date().toISOString();
