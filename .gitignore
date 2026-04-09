@@ -39,3 +39,6 @@ yarn-error.*
 .vercel
 
 .env
+
+# Clerk example template
+clerk-expo/

@@ -6,7 +6,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -14,7 +14,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { View, Text, StyleSheet } from "react-native";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
-import { AppProvider } from "@/context/AppContext";
+import { AppProvider, useApp } from "@/context/AppContext";
 import { ClerkProvider, useAuth } from "@clerk/clerk-expo";
 import * as SecureStore from "expo-secure-store";
 import Colors from "@/constants/colors";
@@ -51,10 +51,32 @@ function RootLayoutNav() {
   );
 }
 
+/**
+ * Centralized auth guard. Redirects any unauthenticated user to /auth when they
+ * attempt to access any route other than /auth itself.
+ * Runs via useEffect so it fires after navigation context is available.
+ */
+function AuthGuard() {
+  const { isSignedIn, isLoading } = useApp();
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isLoading) return;
+    const onAuthScreen = segments[0] === "auth";
+    if (!isSignedIn && !onAuthScreen) {
+      router.replace("/auth");
+    }
+  }, [isSignedIn, isLoading, segments]);
+
+  return null;
+}
+
 function AppContent() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <KeyboardProvider>
+        <AuthGuard />
         <RootLayoutNav />
       </KeyboardProvider>
     </GestureHandlerRootView>

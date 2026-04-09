@@ -13,6 +13,60 @@ const router = Router();
 router.use(clerkMiddleware());
 router.use(requireAuth());
 
+// ── Shared types for skill-map blending ──────────────────────────────────────
+
+type SkillMap = Record<string, number>;
+
+interface AnswerRecord {
+  questionId?: string;
+  correct: boolean;
+  topic: string;
+  subject: string;
+}
+
+interface SessionForBlend {
+  id: string;
+  date: string;
+  answers: AnswerRecord[];
+}
+
+/**
+ * Blends a baseline skill map with first-attempt practice accuracy across all sessions.
+ * Identical algorithm to the client-side blendSkillMap in context/AppContext.tsx.
+ * practiceWeight = min(0.7, firstAttemptCount / 14) — caps at 70% influence.
+ */
+function blendSkillMap(baseline: SkillMap, sessions: SessionForBlend[]): SkillMap {
+  const sorted = [...sessions].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+  const seen = new Set<string>();
+  const practiceMap: Record<string, { correct: number; total: number }> = {};
+
+  for (const s of sorted) {
+    for (const a of s.answers) {
+      const key = a.questionId ?? `${a.topic}__${a.subject}__noid__${s.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (!practiceMap[a.topic]) practiceMap[a.topic] = { correct: 0, total: 0 };
+      practiceMap[a.topic].total++;
+      if (a.correct) practiceMap[a.topic].correct++;
+    }
+  }
+
+  const blended: SkillMap = { ...baseline };
+  for (const [topic, data] of Object.entries(practiceMap)) {
+    if (data.total < 1) continue;
+    const practiceScore = Math.round((data.correct / data.total) * 100);
+    const weight = Math.min(0.7, data.total / 14);
+    if (baseline[topic] !== undefined) {
+      blended[topic] = Math.round(baseline[topic] * (1 - weight) + practiceScore * weight);
+    } else {
+      blended[topic] = practiceScore;
+    }
+  }
+  return blended;
+}
+
 // ── GET /api/me ──────────────────────────────────────────────────────────────
 router.get("/", async (req, res) => {
   try {
@@ -23,8 +77,12 @@ router.get("/", async (req, res) => {
     const [profile, progress, sessions] = await Promise.all([
       db.select().from(studentProfiles).where(eq(studentProfiles.clerkUserId, userId)).limit(1),
       db.select().from(userProgress).where(eq(userProgress.userId, userId)).limit(1),
-      db.select().from(practiceSessions).where(eq(practiceSessions.userId, userId))
-        .orderBy(desc(practiceSessions.date)).limit(100),
+      db
+        .select()
+        .from(practiceSessions)
+        .where(eq(practiceSessions.userId, userId))
+        .orderBy(desc(practiceSessions.date))
+        .limit(100),
     ]);
 
     const p = profile[0] ?? null;
@@ -57,7 +115,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ── GET /api/me/sessions ──────────────────────────────────────────────────────
+// ── GET /api/me/sessions ─────────────────────────────────────────────────────
 router.get("/sessions", async (req, res) => {
   try {
     const { userId } = getAuth(req);
@@ -71,16 +129,18 @@ router.get("/sessions", async (req, res) => {
       .orderBy(desc(practiceSessions.date))
       .limit(100);
 
-    res.json(sessions.map((s) => ({
-      id: s.id,
-      date: s.date,
-      subject: s.subject,
-      topic: s.topic,
-      score: s.score,
-      total: s.total,
-      xpEarned: s.xpEarned,
-      answers: s.answers ?? [],
-    })));
+    res.json(
+      sessions.map((s) => ({
+        id: s.id,
+        date: s.date,
+        subject: s.subject,
+        topic: s.topic,
+        score: s.score,
+        total: s.total,
+        xpEarned: s.xpEarned,
+        answers: s.answers ?? [],
+      }))
+    );
   } catch (e) {
     console.error("GET /api/me/sessions error:", e);
     res.status(500).json({ error: "Internal server error" });
@@ -102,17 +162,13 @@ router.put("/profile", async (req, res) => {
     if (!name || !grade || !subject) return res.status(400).json({ error: "Missing fields" });
 
     const db = getDb();
-    await db.insert(studentProfiles).values({
-      clerkUserId: userId,
-      name,
-      grade,
-      subject,
-      examDate: examDate ?? null,
-      createdAt: new Date().toISOString(),
-    }).onConflictDoUpdate({
-      target: studentProfiles.clerkUserId,
-      set: { name, grade, subject, examDate: examDate ?? null },
-    });
+    await db
+      .insert(studentProfiles)
+      .values({ clerkUserId: userId, name, grade, subject, examDate: examDate ?? null, createdAt: new Date().toISOString() })
+      .onConflictDoUpdate({
+        target: studentProfiles.clerkUserId,
+        set: { name, grade, subject, examDate: examDate ?? null },
+      });
 
     await db.insert(userProgress).values({ userId }).onConflictDoNothing();
 
@@ -133,11 +189,10 @@ router.put("/diagnostic", async (req, res) => {
     if (!diagnosticResult) return res.status(400).json({ error: "Missing diagnosticResult" });
 
     const db = getDb();
-    await db.insert(userProgress).values({ userId, diagnosticResult })
-      .onConflictDoUpdate({
-        target: userProgress.userId,
-        set: { diagnosticResult },
-      });
+    await db
+      .insert(userProgress)
+      .values({ userId, diagnosticResult })
+      .onConflictDoUpdate({ target: userProgress.userId, set: { diagnosticResult } });
 
     res.json({ ok: true });
   } catch (e) {
@@ -158,17 +213,16 @@ router.put("/skillmap", async (req, res) => {
     };
 
     const db = getDb();
-    await db.insert(userProgress).values({
-      userId,
-      skillMap: skillMap ?? {},
-      baselineSkillMap: baselineSkillMap ?? {},
-    }).onConflictDoUpdate({
-      target: userProgress.userId,
-      set: {
-        ...(skillMap !== undefined ? { skillMap } : {}),
-        ...(baselineSkillMap !== undefined ? { baselineSkillMap } : {}),
-      },
-    });
+    await db
+      .insert(userProgress)
+      .values({ userId, skillMap: skillMap ?? {}, baselineSkillMap: baselineSkillMap ?? {} })
+      .onConflictDoUpdate({
+        target: userProgress.userId,
+        set: {
+          ...(skillMap !== undefined ? { skillMap } : {}),
+          ...(baselineSkillMap !== undefined ? { baselineSkillMap } : {}),
+        },
+      });
 
     res.json({ ok: true });
   } catch (e) {
@@ -178,7 +232,8 @@ router.put("/skillmap", async (req, res) => {
 });
 
 // ── POST /api/me/sessions ─────────────────────────────────────────────────────
-// Server-authoritative: computes XP and streak, returns updated totals.
+// Idempotent: skips XP/streak/skill-map update if session already exists.
+// Server-authoritative: computes XP, streak, and full skill-map blend.
 router.post("/sessions", async (req, res) => {
   try {
     const { userId } = getAuth(req);
@@ -200,20 +255,30 @@ router.post("/sessions", async (req, res) => {
 
     const db = getDb();
 
-    // Insert session (idempotent)
-    await db.insert(practiceSessions).values({
-      id,
-      userId,
-      date,
-      subject,
-      topic: topic ?? subject,
-      score: safeScore,
-      total: total ?? 0,
-      xpEarned,
-      answers: answers ?? [],
-    }).onConflictDoNothing();
+    // ── Idempotency check ──────────────────────────────────────────────────────
+    const existing = await db
+      .select({ id: practiceSessions.id })
+      .from(practiceSessions)
+      .where(eq(practiceSessions.id, id))
+      .limit(1);
 
-    // Server-side XP + streak computation
+    const isNewSession = existing.length === 0;
+
+    if (isNewSession) {
+      await db.insert(practiceSessions).values({
+        id,
+        userId,
+        date,
+        subject,
+        topic: topic ?? subject,
+        score: safeScore,
+        total: total ?? 0,
+        xpEarned,
+        answers: answers ?? [],
+      });
+    }
+
+    // ── Read current progress ──────────────────────────────────────────────────
     const [current] = await db
       .select()
       .from(userProgress)
@@ -223,40 +288,69 @@ router.post("/sessions", async (req, res) => {
     const currentXp = current?.totalXp ?? 0;
     const currentStreak = current?.streakDays ?? 0;
     const lastPracticeDate = current?.lastPracticeDate ?? null;
+    const baseline = (current?.baselineSkillMap ?? {}) as SkillMap;
 
-    const todayStr = new Date().toDateString();
-    const yesterdayStr = new Date(Date.now() - 86_400_000).toDateString();
-    const lastDateStr = lastPracticeDate ? new Date(lastPracticeDate).toDateString() : null;
+    // ── Compute XP + streak (only for new sessions) ────────────────────────────
+    let newTotalXp = currentXp;
+    let newStreakDays = currentStreak;
+    let newLastPracticeDate = lastPracticeDate;
 
-    const newTotalXp = currentXp + xpEarned;
-    const newStreakDays =
-      lastDateStr === todayStr
-        ? currentStreak
-        : lastDateStr === yesterdayStr
-          ? currentStreak + 1
-          : 1;
-    const newLastPracticeDate = new Date().toISOString();
+    if (isNewSession) {
+      const todayStr = new Date().toDateString();
+      const yesterdayStr = new Date(Date.now() - 86_400_000).toDateString();
+      const lastDateStr = lastPracticeDate ? new Date(lastPracticeDate).toDateString() : null;
 
-    await db.insert(userProgress).values({
-      userId,
-      totalXp: newTotalXp,
-      streakDays: newStreakDays,
-      lastPracticeDate: newLastPracticeDate,
-    }).onConflictDoUpdate({
-      target: userProgress.userId,
-      set: {
+      newTotalXp = currentXp + xpEarned;
+      newStreakDays =
+        lastDateStr === todayStr
+          ? currentStreak
+          : lastDateStr === yesterdayStr
+            ? currentStreak + 1
+            : 1;
+      newLastPracticeDate = new Date().toISOString();
+    }
+
+    // ── Recompute full skill-map blend from all sessions ───────────────────────
+    const allSessionRows = await db
+      .select()
+      .from(practiceSessions)
+      .where(eq(practiceSessions.userId, userId));
+
+    const sessions: SessionForBlend[] = allSessionRows.map((s) => ({
+      id: s.id,
+      date: s.date,
+      answers: (s.answers ?? []) as AnswerRecord[],
+    }));
+
+    const newSkillMap = blendSkillMap(baseline, sessions);
+
+    // ── Persist updates ────────────────────────────────────────────────────────
+    await db
+      .insert(userProgress)
+      .values({
+        userId,
         totalXp: newTotalXp,
         streakDays: newStreakDays,
         lastPracticeDate: newLastPracticeDate,
-      },
-    });
+        skillMap: newSkillMap,
+      })
+      .onConflictDoUpdate({
+        target: userProgress.userId,
+        set: {
+          totalXp: newTotalXp,
+          streakDays: newStreakDays,
+          lastPracticeDate: newLastPracticeDate,
+          skillMap: newSkillMap,
+        },
+      });
 
     res.json({
       ok: true,
-      xpEarned,
+      xpEarned: isNewSession ? xpEarned : 0,
       totalXp: newTotalXp,
       streakDays: newStreakDays,
       lastPracticeDate: newLastPracticeDate,
+      skillMap: newSkillMap,
     });
   } catch (e) {
     console.error("POST /api/me/sessions error:", e);
@@ -266,6 +360,7 @@ router.post("/sessions", async (req, res) => {
 
 // ── PUT /api/me/xp ─────────────────────────────────────────────────────────────
 // Used ONLY during initial data migration (first sign-in with existing local data).
+// Rejected if server already has XP data to prevent client-side tampering.
 router.put("/xp", async (req, res) => {
   try {
     const { userId } = getAuth(req);
@@ -277,7 +372,6 @@ router.put("/xp", async (req, res) => {
       lastPracticeDate?: string | null;
     };
 
-    // Only set if server currently has 0 XP (i.e., fresh account needing migration)
     const db = getDb();
     const [current] = await db
       .select()
@@ -286,23 +380,26 @@ router.put("/xp", async (req, res) => {
       .limit(1);
 
     if (current && current.totalXp > 0) {
-      // Server already has XP — don't allow client to overwrite
+      // Server already has XP — reject client override to prevent tampering.
       return res.json({ ok: false, reason: "server_has_data" });
     }
 
-    await db.insert(userProgress).values({
-      userId,
-      totalXp: totalXp ?? 0,
-      streakDays: streakDays ?? 0,
-      lastPracticeDate: lastPracticeDate ?? null,
-    }).onConflictDoUpdate({
-      target: userProgress.userId,
-      set: {
+    await db
+      .insert(userProgress)
+      .values({
+        userId,
         totalXp: totalXp ?? 0,
         streakDays: streakDays ?? 0,
         lastPracticeDate: lastPracticeDate ?? null,
-      },
-    });
+      })
+      .onConflictDoUpdate({
+        target: userProgress.userId,
+        set: {
+          totalXp: totalXp ?? 0,
+          streakDays: streakDays ?? 0,
+          lastPracticeDate: lastPracticeDate ?? null,
+        },
+      });
 
     res.json({ ok: true });
   } catch (e) {

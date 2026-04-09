@@ -70,6 +70,7 @@ interface SessionSyncResponse {
   streakDays: number;
   lastPracticeDate: string;
   xpEarned: number;
+  skillMap?: SkillMap;
 }
 
 interface AppContextValue {
@@ -546,7 +547,7 @@ export function AppProvider({
       return updated;
     });
 
-    // Server-authoritative XP/streak: reconcile from server response.
+    // Server-authoritative XP/streak/skillMap: reconcile from server response.
     // (Fire-and-update — does not block the UI.)
     syncPostWithResponse<SessionSyncResponse>("/api/me/sessions", {
       ...full,
@@ -559,6 +560,11 @@ export function AppProvider({
         AsyncStorage.setItem(KEYS.STREAK, String(resp.streakDays)).catch(() => undefined);
         if (resp.lastPracticeDate) {
           AsyncStorage.setItem(KEYS.LAST_PRACTICE, resp.lastPracticeDate).catch(() => undefined);
+        }
+        // Reconcile skill map with server's authoritative blend.
+        if (resp.skillMap && Object.keys(resp.skillMap).length > 0) {
+          setSkillMap(resp.skillMap);
+          AsyncStorage.setItem(KEYS.SKILL_MAP, JSON.stringify(resp.skillMap)).catch(() => undefined);
         }
       }
     });
