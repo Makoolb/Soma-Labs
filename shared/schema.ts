@@ -29,6 +29,18 @@ export const studentProfiles = pgTable("student_profiles", {
   createdAt: text("created_at"),
 });
 
+/**
+ * skill_maps stores per-user skill data as JSONB objects (topic → score%).
+ *
+ * Architectural note: the topic-score pairs are stored as a single JSONB object
+ * rather than normalised per-topic rows. This is intentional:
+ *   - The skill map is always read/written as a unit (blending, display).
+ *   - The topic set is dynamic and differs by grade/subject.
+ *   - A JSONB blob avoids N-row reads/writes per session and simplifies the
+ *     blending algorithm which operates on the whole map at once.
+ * If per-topic analytics (aggregation, ranking across users) are needed later,
+ * the map can be exploded into a separate analytics table at that point.
+ */
 export const skillMaps = pgTable("skill_maps", {
   userId: text("user_id").primaryKey(),
   skillMap: jsonb("skill_map").default(sql`'{}'::jsonb`),

@@ -11,7 +11,8 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Modal, TouchableOpacity } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { AppProvider, useApp } from "@/context/AppContext";
@@ -72,12 +73,51 @@ function AuthGuard() {
   return null;
 }
 
+/**
+ * Shown when the user signs in for the first time on a device that already has
+ * local guest progress. Asks whether to transfer that data to the new account.
+ */
+function MigrationPromptModal() {
+  const { pendingMigration, confirmMigration } = useApp();
+  return (
+    <Modal visible={pendingMigration} transparent animationType="fade">
+      <View style={migrStyles.overlay}>
+        <View style={migrStyles.card}>
+          <View style={migrStyles.iconWrap}>
+            <Ionicons name="cloud-upload-outline" size={44} color={Colors.light.navy} />
+          </View>
+          <Text style={migrStyles.title}>Transfer Your Progress?</Text>
+          <Text style={migrStyles.body}>
+            We found practice data on this device from before you signed in.
+            Would you like to transfer it to your new account?
+          </Text>
+          <TouchableOpacity
+            style={migrStyles.confirmBtn}
+            onPress={() => confirmMigration(true)}
+            activeOpacity={0.85}
+          >
+            <Text style={migrStyles.confirmTxt}>Yes, Transfer My Progress</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={migrStyles.declineBtn}
+            onPress={() => confirmMigration(false)}
+            activeOpacity={0.85}
+          >
+            <Text style={migrStyles.declineTxt}>No, Start Fresh</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function AppContent() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <KeyboardProvider>
         <AuthGuard />
         <RootLayoutNav />
+        <MigrationPromptModal />
       </KeyboardProvider>
     </GestureHandlerRootView>
   );
@@ -112,6 +152,40 @@ function ConfigurationRequiredScreen() {
     </View>
   );
 }
+
+const migrStyles = StyleSheet.create({
+  overlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center", alignItems: "center", padding: 24,
+  },
+  card: {
+    backgroundColor: Colors.light.background,
+    borderRadius: 28, padding: 28, gap: 16, width: "100%", maxWidth: 400,
+    alignItems: "center",
+  },
+  iconWrap: { marginBottom: 4 },
+  title: {
+    fontFamily: "Inter_700Bold", fontSize: 22,
+    color: Colors.light.navy, textAlign: "center",
+  },
+  body: {
+    fontFamily: "Inter_400Regular", fontSize: 15,
+    color: Colors.light.textSecondary, textAlign: "center", lineHeight: 22,
+  },
+  confirmBtn: {
+    width: "100%", backgroundColor: Colors.light.navy,
+    borderRadius: 16, paddingVertical: 18,
+    alignItems: "center",
+  },
+  confirmTxt: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#fff" },
+  declineBtn: {
+    width: "100%", backgroundColor: Colors.light.card,
+    borderRadius: 16, paddingVertical: 16,
+    alignItems: "center",
+    borderWidth: 2, borderColor: Colors.light.border,
+  },
+  declineTxt: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: Colors.light.textSecondary },
+});
 
 const cfgStyles = StyleSheet.create({
   container: {

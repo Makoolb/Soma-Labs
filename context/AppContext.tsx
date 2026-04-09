@@ -85,6 +85,8 @@ interface AppContextValue {
   streakDays: number;
   totalXP: number;
   isLoading: boolean;
+  /** True when a first-sign-in migration prompt is waiting for user confirmation. */
+  pendingMigration: boolean;
   saveProfile: (profile: StudentProfile) => Promise<void>;
   updateExamDate: (date: string | null) => Promise<void>;
   saveDiagnosticResult: (result: DiagnosticResult) => Promise<void>;
@@ -92,6 +94,8 @@ interface AppContextValue {
   dismissSkillMapReady: () => void;
   addSession: (session: Omit<SessionResult, "id">) => Promise<void>;
   resetAll: () => Promise<void>;
+  /** Called by the migration prompt: true = migrate, false = discard local data. */
+  confirmMigration: (accept: boolean) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -171,6 +175,9 @@ export function AppProvider({
   // True while /api/me hydration is in-flight for a signed-in user.
   // Prevents routing decisions before the server profile/history is applied.
   const [isHydrating, setIsHydrating] = useState(false);
+  // True when the app found local guest data on first sign-in and is waiting
+  // for the user to decide whether to transfer it to the new account.
+  const [pendingMigration, setPendingMigration] = useState(false);
 
   const baselineRef = useRef<SkillMap | null>(null);
 
@@ -179,7 +186,7 @@ export function AppProvider({
   // NOT trigger clearAll() — local guest progress is preserved until first sign-in.
   const prevUserIdRef = useRef<string | null>(null);
 
-  const isLoading = storageLoading || !isAuthLoaded || isHydrating;
+  const isLoading = storageLoading || !isAuthLoaded || isHydrating || pendingMigration;
 
   useEffect(() => {
     baselineRef.current = baselineSkillMap;
@@ -373,9 +380,18 @@ export function AppProvider({
       if (!data.profile) {
         // Server has no data for this account.
         if (shouldMigrate) {
-          // Migrate ALL local data to server (first sign-in with prior guest progress).
-          // Capture local state values here — they're valid for fresh sign-in.
-          await migrateLocalToServer();
+          // Check if there is local guest data worth migrating.
+          // If so, prompt the user to decide — never migrate without consent.
+          const hasLocalData =
+            profile !== null ||
+            sessions.length > 0 ||
+            totalXP > 0 ||
+            diagnosticResult !== null;
+          if (hasLocalData) {
+            setPendingMigration(true);
+            // The migration prompt (MigrationPromptModal in _layout.tsx) will call
+            // confirmMigration(true/false) to proceed.
+          }
         }
         // For user switch (shouldMigrate=false) server had no data — state was
         // already cleared by clearAll(); nothing more to do.
@@ -578,6 +594,20 @@ export function AppProvider({
     await clearAll();
   }
 
+  /**
+   * Called by the MigrationPromptModal after the user decides.
+   * accept=true  → push all local data to the server, keep local state.
+   * accept=false → discard local data; user starts fresh on this account.
+   */
+  async function confirmMigration(accept: boolean) {
+    setPendingMigration(false);
+    if (accept) {
+      await migrateLocalToServer();
+    } else {
+      await clearAll();
+    }
+  }
+
   const value = useMemo(
     () => ({
       profile,
@@ -591,6 +621,7 @@ export function AppProvider({
       streakDays,
       totalXP,
       isLoading,
+      pendingMigration,
       saveProfile,
       updateExamDate,
       saveDiagnosticResult,
@@ -598,9 +629,10 @@ export function AppProvider({
       dismissSkillMapReady,
       addSession,
       resetAll,
+      confirmMigration,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [profile, isSignedIn, diagnosticResult, skillMap, skillMapReady, sessions, streakDays, totalXP, isLoading]
+    [profile, isSignedIn, diagnosticResult, skillMap, skillMapReady, sessions, streakDays, totalXP, isLoading, pendingMigration]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
