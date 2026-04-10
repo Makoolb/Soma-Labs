@@ -55,7 +55,9 @@ export default function AuthScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const isProfileComplete = newUserName.trim().length > 0 && newUserGrade !== null;
-  const isCredComplete = email.trim().length > 0 && password.length >= 8;
+  const isSignUpCredComplete = email.trim().length > 0 && password.length >= 8;
+  const isSignInCredComplete = email.trim().length > 0 && password.length > 0;
+  const isCredComplete = authMode === "signin" ? isSignInCredComplete : isSignUpCredComplete;
 
   function goBack() {
     Haptics.selectionAsync();
