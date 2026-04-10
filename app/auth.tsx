@@ -96,9 +96,14 @@ export default function AuthScreen() {
           pathname: "/onboarding",
           params: { name: newUserName.trim(), grade: newUserGrade! },
         });
-      } else {
+      } else if (
+        result.status === "missing_requirements" &&
+        result.unverifiedFields?.includes("email_address")
+      ) {
         await signUp!.prepareEmailAddressVerification({ strategy: "email_code" });
         setCredStep("verify");
+      } else {
+        setError("Account creation could not be completed. Please try again.");
       }
     } catch (err) {
       setError(extractErrorMessage(err));
