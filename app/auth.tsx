@@ -10,19 +10,21 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useOAuth } from "@clerk/clerk-expo";
+import { useSignIn, useSignUp } from "@clerk/clerk-expo";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 
 type AuthMode = "select" | "signup" | "signin";
-
-type ClerkError = { code?: string; longMessage?: string; message?: string };
-type ClerkErrorResponse = { errors?: ClerkError[] };
+type SignupStep = "profile" | "credentials";
+type CredStep = "form" | "verify";
 
 const GRADES = ["P4", "P5", "P6"] as const;
 type Grade = typeof GRADES[number];
+
+type ClerkError = { code?: string; longMessage?: string; message?: string };
+type ClerkErrorResponse = { errors?: ClerkError[] };
 
 function extractErrorMessage(err: unknown): string {
   const e = err as ClerkErrorResponse;
@@ -34,30 +36,41 @@ export default function AuthScreen() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const { startOAuthFlow: startGoogle } = useOAuth({ strategy: "oauth_google" });
-  const { startOAuthFlow: startApple } = useOAuth({ strategy: "oauth_apple" });
+  const { signIn, isLoaded: signInLoaded, setActive: setSignInActive } = useSignIn();
+  const { signUp, isLoaded: signUpLoaded, setActive: setSignUpActive } = useSignUp();
 
-  // ── Navigation state ───────────────────────────────────────────────────────
   const [authMode, setAuthMode] = useState<AuthMode>("select");
-  // Signup flows through "profile" (name + grade) THEN oauth buttons
-  const [signupStep, setSignupStep] = useState<"profile" | "oauth">("profile");
+  const [signupStep, setSignupStep] = useState<SignupStep>("profile");
+  const [credStep, setCredStep] = useState<CredStep>("form");
 
-  // ── Sign-up profile fields (collected BEFORE auth) ─────────────────────────
   const [newUserName, setNewUserName] = useState("");
   const [newUserGrade, setNewUserGrade] = useState<Grade | null>(null);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [verifyCode, setVerifyCode] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ── Navigation helpers ─────────────────────────────────────────────────────
+  const isProfileComplete = newUserName.trim().length > 0 && newUserGrade !== null;
+  const isCredComplete = email.trim().length > 0 && password.length >= 8;
+
   function goBack() {
     Haptics.selectionAsync();
     setError(null);
-    if (authMode === "signup" && signupStep === "oauth") {
+    if (credStep === "verify") {
+      setCredStep("form");
+    } else if (authMode === "signup" && signupStep === "credentials") {
       setSignupStep("profile");
     } else {
       setAuthMode("select");
       setSignupStep("profile");
+      setCredStep("form");
+      setEmail("");
+      setPassword("");
+      setVerifyCode("");
     }
   }
 
@@ -65,61 +78,85 @@ export default function AuthScreen() {
     Haptics.selectionAsync();
     setAuthMode(mode);
     setError(null);
+    setCredStep("form");
   }
 
-  // ── OAuth ──────────────────────────────────────────────────────────────────
-  async function handleGoogleAuth() {
+  async function handleSignUp() {
+    if (!signUpLoaded || !isCredComplete) return;
     setLoading(true);
     setError(null);
     try {
-      const { createdSessionId, setActive } = await startGoogle();
-      if (createdSessionId && setActive) {
-        await setActive({ session: createdSessionId });
-        if (authMode === "signup") {
-          router.replace({
-            pathname: "/onboarding",
-            params: { name: newUserName.trim(), grade: newUserGrade! },
-          });
-        } else {
-          router.replace("/");
-        }
+      const result = await signUp!.create({
+        emailAddress: email.trim(),
+        password,
+      });
+      if (result.status === "complete" && result.createdSessionId) {
+        await setSignUpActive!({ session: result.createdSessionId });
+        router.replace({
+          pathname: "/onboarding",
+          params: { name: newUserName.trim(), grade: newUserGrade! },
+        });
+      } else {
+        await signUp!.prepareEmailAddressVerification({ strategy: "email_code" });
+        setCredStep("verify");
       }
-    } catch {
-      setError("Google sign-in failed. Please try again.");
+    } catch (err) {
+      setError(extractErrorMessage(err));
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleAppleAuth() {
+  async function handleVerifyEmail() {
+    if (!signUpLoaded || verifyCode.length < 6) return;
     setLoading(true);
     setError(null);
     try {
-      const { createdSessionId, setActive } = await startApple();
-      if (createdSessionId && setActive) {
-        await setActive({ session: createdSessionId });
-        if (authMode === "signup") {
-          router.replace({
-            pathname: "/onboarding",
-            params: { name: newUserName.trim(), grade: newUserGrade! },
-          });
-        } else {
-          router.replace("/");
-        }
+      const result = await signUp!.attemptEmailAddressVerification({ code: verifyCode });
+      if (result.status === "complete" && result.createdSessionId) {
+        await setSignUpActive!({ session: result.createdSessionId });
+        router.replace({
+          pathname: "/onboarding",
+          params: { name: newUserName.trim(), grade: newUserGrade! },
+        });
       }
-    } catch {
-      setError("Apple sign-in failed. Please try again.");
+    } catch (err) {
+      setError(extractErrorMessage(err));
     } finally {
       setLoading(false);
     }
   }
 
-  const isProfileComplete = newUserName.trim().length > 0 && newUserGrade !== null;
+  async function handleSignIn() {
+    if (!signInLoaded || !email.trim() || !password) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await signIn!.create({
+        identifier: email.trim(),
+        password,
+      });
+      if (result.status === "complete") {
+        await setSignInActive!({ session: result.createdSessionId });
+        router.replace("/");
+      }
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  // ── Shared card header (back button) ──────────────────────────────────────
   const showBack = authMode !== "select";
   const backLabel =
-    authMode === "signup" && signupStep === "oauth" ? "Your Details" : "Back";
+    credStep === "verify"
+      ? "Back"
+      : authMode === "signup" && signupStep === "credentials"
+        ? "Your Details"
+        : "Back";
+
+  const isVerifyScreen = credStep === "verify";
+  const isCredScreen = (authMode === "signin") || (authMode === "signup" && signupStep === "credentials" && !isVerifyScreen);
 
   return (
     <ScrollView
@@ -138,9 +175,11 @@ export default function AuthScreen() {
             ? "Save your progress and access it on any device"
             : authMode === "signup" && signupStep === "profile"
               ? "Tell us about yourself to get started"
-              : authMode === "signup"
-                ? "Verify your identity to create your account"
-                : "Welcome back — sign in to continue"}
+              : isVerifyScreen
+                ? "Check your email for a 6-digit code"
+                : authMode === "signup"
+                  ? "Create your account"
+                  : "Welcome back — sign in to continue"}
         </Text>
       </View>
 
@@ -189,7 +228,7 @@ export default function AuthScreen() {
           </View>
         )}
 
-        {/* ── Sign-up: profile step (name + grade BEFORE auth) ── */}
+        {/* ── Sign-up: profile step ── */}
         {authMode === "signup" && signupStep === "profile" && (
           <View style={styles.form}>
             <Text style={styles.fieldLabel}>Your Name</Text>
@@ -221,7 +260,7 @@ export default function AuthScreen() {
             <Text style={styles.hint}>You can update these later from the Parent Dashboard</Text>
             <TouchableOpacity
               style={[styles.primaryBtn, !isProfileComplete && styles.btnDisabled]}
-              onPress={() => { Haptics.selectionAsync(); setSignupStep("oauth"); setError(null); }}
+              onPress={() => { Haptics.selectionAsync(); setSignupStep("credentials"); setError(null); }}
               disabled={!isProfileComplete}
               testID="auth-profile-continue"
             >
@@ -231,39 +270,98 @@ export default function AuthScreen() {
           </View>
         )}
 
-        {/* ── OAuth buttons (signup oauth step OR signin) ── */}
-        {(authMode === "signin" || (authMode === "signup" && signupStep === "oauth")) && (
+        {/* ── Credentials form (sign-up credentials step OR sign-in) ── */}
+        {isCredScreen && (
           <View style={styles.form}>
-            <Text style={styles.hint}>
-              {authMode === "signup"
-                ? "Use your Google account to create a SabiLab account"
-                : "Use your Google account to sign in"}
-            </Text>
+            <Text style={styles.fieldLabel}>Email Address</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="student@example.com"
+              placeholderTextColor={Colors.light.textTertiary}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoFocus
+              testID="auth-email-input"
+            />
+            <Text style={[styles.fieldLabel, { marginTop: 4 }]}>Password</Text>
+            <View style={styles.passwordRow}>
+              <TextInput
+                style={[styles.textInput, styles.passwordInput]}
+                placeholder={authMode === "signup" ? "At least 8 characters" : "Your password"}
+                placeholderTextColor={Colors.light.textTertiary}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                testID="auth-password-input"
+              />
+              <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword((v) => !v)}>
+                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={Colors.light.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            {authMode === "signup" && (
+              <Text style={styles.hint}>Minimum 8 characters</Text>
+            )}
             <TouchableOpacity
-              style={[styles.socialBtn, loading && styles.btnDisabled]}
-              onPress={handleGoogleAuth}
-              disabled={loading}
-              testID="auth-google-btn"
+              style={[styles.primaryBtn, (!isCredComplete || loading) && styles.btnDisabled]}
+              onPress={authMode === "signup" ? handleSignUp : handleSignIn}
+              disabled={!isCredComplete || loading}
+              testID={authMode === "signup" ? "auth-signup-submit" : "auth-signin-submit"}
             >
               {loading
-                ? <ActivityIndicator color={Colors.light.navy} />
-                : <><Ionicons name="logo-google" size={20} color="#EA4335" /><Text style={styles.socialBtnTxt}>Continue with Google</Text></>
+                ? <ActivityIndicator color="#fff" />
+                : <>
+                    <Text style={styles.primaryBtnTxt}>
+                      {authMode === "signup" ? "Create Account" : "Sign In"}
+                    </Text>
+                    <Ionicons name="arrow-forward" size={18} color="#fff" />
+                  </>
               }
             </TouchableOpacity>
+          </View>
+        )}
 
-            {Platform.OS === "ios" && (
-              <TouchableOpacity
-                style={[styles.appleBtn, loading && styles.btnDisabled]}
-                onPress={handleAppleAuth}
-                disabled={loading}
-                testID="auth-apple-btn"
-              >
-                {loading
-                  ? <ActivityIndicator color="#fff" />
-                  : <><Ionicons name="logo-apple" size={20} color="#fff" /><Text style={styles.appleBtnTxt}>Sign in with Apple</Text></>
-                }
-              </TouchableOpacity>
-            )}
+        {/* ── Email verification OTP step ── */}
+        {authMode === "signup" && isVerifyScreen && (
+          <View style={styles.form}>
+            <Text style={styles.hint}>
+              We sent a 6-digit code to <Text style={styles.emailHighlight}>{email}</Text>
+            </Text>
+            <Text style={styles.fieldLabel}>Verification Code</Text>
+            <TextInput
+              style={[styles.textInput, styles.codeInput]}
+              placeholder="123456"
+              placeholderTextColor={Colors.light.textTertiary}
+              value={verifyCode}
+              onChangeText={setVerifyCode}
+              keyboardType="number-pad"
+              maxLength={6}
+              autoFocus
+              testID="auth-verify-input"
+            />
+            <TouchableOpacity
+              style={[styles.primaryBtn, (verifyCode.length < 6 || loading) && styles.btnDisabled]}
+              onPress={handleVerifyEmail}
+              disabled={verifyCode.length < 6 || loading}
+              testID="auth-verify-submit"
+            >
+              {loading
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.primaryBtnTxt}>Verify Email</Text>
+              }
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={async () => {
+                try { await signUp!.prepareEmailAddressVerification({ strategy: "email_code" }); }
+                catch {}
+              }}
+            >
+              <Text style={styles.resendTxt}>Resend code</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -320,6 +418,7 @@ const styles = StyleSheet.create({
   form: { gap: 12 },
   fieldLabel: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: Colors.light.navy },
   hint: { fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary, lineHeight: 20 },
+  emailHighlight: { fontFamily: "Inter_600SemiBold", color: Colors.light.navy },
 
   gradeRow: { flexDirection: "row", gap: 10 },
   gradeBtn: {
@@ -338,6 +437,17 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular", fontSize: 16, color: Colors.light.text,
     backgroundColor: Colors.light.card,
   },
+  passwordRow: { position: "relative" },
+  passwordInput: { paddingRight: 52 },
+  eyeBtn: {
+    position: "absolute", right: 14, top: 0, bottom: 0,
+    justifyContent: "center", alignItems: "center",
+  },
+
+  codeInput: {
+    textAlign: "center", fontSize: 28, letterSpacing: 8,
+    fontFamily: "Inter_700Bold",
+  },
 
   primaryBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
@@ -346,19 +456,10 @@ const styles = StyleSheet.create({
   primaryBtnTxt: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#fff" },
   btnDisabled: { opacity: 0.45 },
 
-  socialBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
-    borderWidth: 1.5, borderColor: Colors.light.border,
-    borderRadius: 16, paddingVertical: 16,
-    backgroundColor: Colors.light.card,
+  resendTxt: {
+    fontFamily: "Inter_600SemiBold", fontSize: 13,
+    color: Colors.light.navy, textAlign: "center",
   },
-  socialBtnTxt: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: Colors.light.navy },
-
-  appleBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
-    backgroundColor: "#000", borderRadius: 16, paddingVertical: 16,
-  },
-  appleBtnTxt: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: "#fff" },
 
   footer: {
     fontFamily: "Inter_400Regular", fontSize: 13,
