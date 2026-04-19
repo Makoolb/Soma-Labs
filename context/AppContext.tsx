@@ -10,6 +10,7 @@ import React, {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fetch } from "expo/fetch";
 import { getApiUrl } from "@/lib/query-client";
+import { BADGE_DEFS, type BadgeDef, type EarnedBadge } from "@shared/badges";
 
 export type Grade = "P4" | "P5" | "P6";
 export type Subject = "English" | "Maths" | "Both";
@@ -62,6 +63,7 @@ interface ServerUserData {
   baselineSkillMap: SkillMap | null;
   diagnosticResult: DiagnosticResult | null;
   sessions: SessionResult[];
+  badges?: EarnedBadge[];
 }
 
 interface SessionSyncResponse {
@@ -71,6 +73,7 @@ interface SessionSyncResponse {
   lastPracticeDate: string;
   xpEarned: number;
   skillMap?: SkillMap;
+  newBadges?: EarnedBadge[];
 }
 
 interface AppContextValue {
@@ -87,6 +90,8 @@ interface AppContextValue {
   isLoading: boolean;
   pendingMigration: boolean;
   syncError: string | null;
+  badges: EarnedBadge[];
+  newlyEarnedBadges: BadgeDef[];
   saveProfile: (profile: StudentProfile) => Promise<void>;
   updateExamDate: (date: string | null) => Promise<void>;
   saveDiagnosticResult: (result: DiagnosticResult) => Promise<void>;
@@ -94,6 +99,7 @@ interface AppContextValue {
   dismissSkillMapReady: () => void;
   addSession: (session: Omit<SessionResult, "id">) => Promise<void>;
   resetAll: () => Promise<void>;
+  clearNewlyEarnedBadges: () => void;
   /** Called by the migration prompt: true = migrate, false = discard local data. */
   confirmMigration: (accept: boolean) => Promise<void>;
 }
@@ -171,6 +177,8 @@ export function AppProvider({
   const [isHydrating, setIsHydrating] = useState(false);
   const [pendingMigration, setPendingMigration] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [badges, setBadges] = useState<EarnedBadge[]>([]);
+  const [newlyEarnedBadges, setNewlyEarnedBadges] = useState<BadgeDef[]>([]);
 
   const baselineRef = useRef<SkillMap | null>(null);
   // null = "signed out" so initial state never triggers clearAll on mount
@@ -269,6 +277,8 @@ export function AppProvider({
     setSessions([]);
     setStreakDays(0);
     setTotalXP(0);
+    setBadges([]);
+    setNewlyEarnedBadges([]);
     await Promise.all(Object.values(KEYS).map((k) => AsyncStorage.removeItem(k)));
   }
 
@@ -408,6 +418,10 @@ export function AppProvider({
       } else {
         await AsyncStorage.removeItem(KEYS.LAST_PRACTICE);
       }
+
+      if (Array.isArray(data.badges)) {
+        setBadges(data.badges);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Sync failed";
       console.warn("hydrateFromServer failed:", e);
@@ -508,6 +522,10 @@ export function AppProvider({
     setSkillMapReady(false);
   }
 
+  function clearNewlyEarnedBadges() {
+    setNewlyEarnedBadges([]);
+  }
+
   async function addSession(session: Omit<SessionResult, "id">) {
     const id = Date.now().toString() + Math.random().toString(36).slice(2, 7);
     const full: SessionResult = { ...session, id };
@@ -546,7 +564,7 @@ export function AppProvider({
       return updated;
     });
 
-    // Fire-and-update: sync session, then reconcile XP/streak/skillMap from server response.
+    // Fire-and-update: sync session, then reconcile XP/streak/skillMap/badges from server response.
     syncPostWithResponse<SessionSyncResponse>("/api/me/sessions", {
       ...full,
       xpEarned: xpGained,
@@ -562,6 +580,21 @@ export function AppProvider({
         if (resp.skillMap && Object.keys(resp.skillMap).length > 0) {
           setSkillMap(resp.skillMap);
           AsyncStorage.setItem(KEYS.SKILL_MAP, JSON.stringify(resp.skillMap)).catch(() => undefined);
+        }
+        if (resp.newBadges && resp.newBadges.length > 0) {
+          setBadges((prev) => {
+            const existingKeys = new Set(prev.map((b) => `${b.badgeId}::${b.context}`));
+            const fresh = resp.newBadges!.filter(
+              (b) => !existingKeys.has(`${b.badgeId}::${b.context}`)
+            );
+            return [...prev, ...fresh];
+          });
+          const defs = resp.newBadges
+            .map((b) => BADGE_DEFS.find((d) => d.id === b.badgeId))
+            .filter((d): d is NonNullable<typeof d> => d !== undefined);
+          if (defs.length > 0) {
+            setNewlyEarnedBadges(defs);
+          }
         }
       }
     });
@@ -595,6 +628,8 @@ export function AppProvider({
       isLoading,
       pendingMigration,
       syncError,
+      badges,
+      newlyEarnedBadges,
       saveProfile,
       updateExamDate,
       saveDiagnosticResult,
@@ -602,10 +637,11 @@ export function AppProvider({
       dismissSkillMapReady,
       addSession,
       resetAll,
+      clearNewlyEarnedBadges,
       confirmMigration,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [profile, isSignedIn, diagnosticResult, skillMap, skillMapReady, sessions, streakDays, totalXP, isLoading, pendingMigration, syncError]
+    [profile, isSignedIn, diagnosticResult, skillMap, skillMapReady, sessions, streakDays, totalXP, isLoading, pendingMigration, syncError, badges, newlyEarnedBadges]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

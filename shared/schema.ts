@@ -76,3 +76,17 @@ export const practiceSessions = pgTable("practice_sessions", {
   xpEarned: integer("xp_earned").notNull().default(0),
   answers: jsonb("answers").default(sql`'[]'::jsonb`),
 });
+
+/**
+ * user_badges stores one row per badge earned.
+ * context allows re-earning with different state (e.g. "level:3" for Better Beta).
+ * Primary key is (userId, badgeId, context) to prevent duplicate awards.
+ */
+export const userBadges = pgTable("user_badges", {
+  userId: text("user_id").notNull(),
+  badgeId: text("badge_id").notNull(),
+  context: text("context").notNull().default(""),
+  earnedAt: text("earned_at").notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.userId, table.badgeId, table.context] }),
+}));

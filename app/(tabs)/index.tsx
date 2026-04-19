@@ -18,6 +18,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors, { OPTION_COLORS } from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
+import { BADGE_DEFS } from "@shared/badges";
 
 const QUICK_TOPICS = [
   { subject: "maths" as const, topic: "Whole Numbers", icon: "numeric", color: Colors.light.optionB },
@@ -82,7 +83,7 @@ const TOPIC_COLORS = [Colors.light.rust, Colors.light.gold, Colors.light.optionC
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { profile, diagnosticResult, skillMap, skillMapReady, dismissSkillMapReady, sessions, streakDays, totalXP, updateExamDate } = useApp();
+  const { profile, diagnosticResult, skillMap, skillMapReady, dismissSkillMapReady, sessions, streakDays, totalXP, updateExamDate, badges } = useApp();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const bannerAnim = useRef(new Animated.Value(0)).current;
@@ -423,6 +424,42 @@ export default function HomeScreen() {
           ))}
         </ScrollView>
 
+        {/* My Badges */}
+        {(badges.length > 0 || sessions.length > 0) && (
+          <>
+            <View style={styles.sectionRow}>
+              <View style={styles.sectionTitleRow}>
+                <View style={[styles.sectionAccent, { backgroundColor: Colors.light.gold }]} />
+                <Text style={styles.sectionTitle}>My Badges</Text>
+              </View>
+              <Text style={styles.badgeCount}>{badges.length}/{BADGE_DEFS.length}</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.badgesRow}>
+              {BADGE_DEFS.map((def) => {
+                const earned = badges.find((b) => b.badgeId === def.id);
+                return (
+                  <View key={def.id} style={[styles.badgeTile, earned ? styles.badgeTileEarned : styles.badgeTileLocked]}>
+                    <View style={[styles.badgeTileIcon, { backgroundColor: earned ? def.color : Colors.light.border }]}>
+                      <Ionicons
+                        name={earned ? (def.icon as any) : "lock-closed"}
+                        size={22}
+                        color={earned ? "#fff" : Colors.light.textTertiary}
+                      />
+                    </View>
+                    <Text
+                      style={[styles.badgeTileName, { color: earned ? Colors.light.navy : Colors.light.textTertiary }]}
+                      numberOfLines={2}
+                    >
+                      {def.name}
+                    </Text>
+                    <View style={[styles.badgeTierDot, { backgroundColor: earned ? def.color : Colors.light.border }]} />
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </>
+        )}
+
         {/* Recent activity */}
         {recentSessions.length > 0 && (
           <>
@@ -725,4 +762,43 @@ const styles = StyleSheet.create({
   modalSaveTxt: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#fff" },
   modalRemoveBtn: { alignItems: "center", paddingVertical: 4 },
   modalRemoveTxt: { fontFamily: "Inter_400Regular", fontSize: 14, color: Colors.light.rust },
+
+  // My Badges
+  badgeCount: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: Colors.light.textSecondary },
+  badgesRow: { gap: 10, paddingBottom: 4 },
+  badgeTile: {
+    width: 90,
+    borderRadius: 18,
+    padding: 12,
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 2,
+  },
+  badgeTileEarned: {
+    backgroundColor: "#fff",
+    borderColor: Colors.light.gold + "50",
+  },
+  badgeTileLocked: {
+    backgroundColor: Colors.light.card,
+    borderColor: Colors.light.border,
+    opacity: 0.7,
+  },
+  badgeTileIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  badgeTileName: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+    textAlign: "center",
+    lineHeight: 15,
+  },
+  badgeTierDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
 });

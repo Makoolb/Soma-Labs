@@ -7,8 +7,10 @@ import {
   diagnosticResults,
   userXp,
   practiceSessions,
+  userBadges,
 } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
+import { BADGE_DEFS, type EarnedBadge } from "@shared/badges";
 
 const router = Router();
 
@@ -116,6 +118,129 @@ async function upsertSkillTopics(
   );
 }
 
+// ── Badge evaluation ──────────────────────────────────────────────────────────
+
+interface BadgeCandidate {
+  badgeId: string;
+  context: string;
+}
+
+async function computeNewBadges(
+  db: ReturnType<typeof getDb>,
+  userId: string,
+  opts: {
+    prevXp: number;
+    newXp: number;
+    prevStreak: number;
+    newStreak: number;
+    sessionScore: number;
+    sessionTotal: number;
+    allSessionCount: number;
+    prevSessions: Array<{ score: number; total: number }>;
+  }
+): Promise<EarnedBadge[]> {
+  const { prevXp, newXp, prevStreak, newStreak, sessionScore, sessionTotal, allSessionCount, prevSessions } = opts;
+
+  const prevLevel = Math.floor(prevXp / 500) + 1;
+  const newLevel = Math.floor(newXp / 500) + 1;
+
+  const candidates: BadgeCandidate[] = [];
+
+  // boldface — first session ever
+  if (allSessionCount === 1) {
+    candidates.push({ badgeId: "boldface", context: "" });
+  }
+
+  // steady_steady — streak first hits 5
+  if (newStreak >= 5 && prevStreak < 5) {
+    candidates.push({ badgeId: "steady_steady", context: "" });
+  }
+
+  // double_steady — streak first hits 10
+  if (newStreak >= 10 && prevStreak < 10) {
+    candidates.push({ badgeId: "double_steady", context: "" });
+  }
+
+  // iron_naija — streak first hits 30
+  if (newStreak >= 30 && prevStreak < 30) {
+    candidates.push({ badgeId: "iron_naija", context: "" });
+  }
+
+  // better_beta — per-level award
+  if (newLevel > prevLevel) {
+    for (let lvl = prevLevel + 1; lvl <= newLevel; lvl++) {
+      candidates.push({ badgeId: "better_beta", context: `level:${lvl}` });
+    }
+  }
+
+  // sharp_brain — session accuracy >= 80% AND better than previous avg
+  if (sessionTotal >= 3) {
+    const sessionAcc = sessionScore / sessionTotal;
+    if (sessionAcc >= 0.8) {
+      const prevAvgAcc =
+        prevSessions.length > 0
+          ? prevSessions.reduce((sum, s) => sum + (s.total > 0 ? s.score / s.total : 0), 0) /
+            prevSessions.length
+          : 0;
+      if (sessionAcc > prevAvgAcc) {
+        candidates.push({ badgeId: "sharp_brain", context: new Date().toISOString().slice(0, 10) });
+      }
+    }
+  }
+
+  // full_marks — 100% with at least 5 questions
+  if (sessionTotal >= 5 && sessionScore === sessionTotal) {
+    candidates.push({ badgeId: "full_marks", context: new Date().toISOString().slice(0, 10) });
+  }
+
+  if (candidates.length === 0) return [];
+
+  // Filter out already-earned once-only badges
+  const onceOnlyIds = ["boldface", "steady_steady", "double_steady", "iron_naija"];
+  const onceOnlyCandidates = candidates.filter((c) => onceOnlyIds.includes(c.badgeId));
+  const reEarnableCandidates = candidates.filter((c) => !onceOnlyIds.includes(c.badgeId));
+
+  let alreadyEarned: Array<{ badgeId: string; context: string }> = [];
+  if (onceOnlyCandidates.length > 0) {
+    const rows = await db
+      .select({ badgeId: userBadges.badgeId, context: userBadges.context })
+      .from(userBadges)
+      .where(eq(userBadges.userId, userId));
+    alreadyEarned = rows;
+  }
+
+  // For better_beta, also check per-context
+  const earnedKeys = new Set(alreadyEarned.map((r) => `${r.badgeId}::${r.context}`));
+
+  const toAward: BadgeCandidate[] = [
+    ...onceOnlyCandidates.filter((c) => !earnedKeys.has(`${c.badgeId}::${c.context}`)),
+    ...reEarnableCandidates.filter((c) => {
+      if (c.badgeId === "better_beta") return !earnedKeys.has(`${c.badgeId}::${c.context}`);
+      return true;
+    }),
+  ];
+
+  if (toAward.length === 0) return [];
+
+  const now = new Date().toISOString();
+  const earned: EarnedBadge[] = toAward.map((c) => ({
+    badgeId: c.badgeId,
+    context: c.context,
+    earnedAt: now,
+  }));
+
+  await Promise.all(
+    earned.map((b) =>
+      db
+        .insert(userBadges)
+        .values({ userId, badgeId: b.badgeId, context: b.context, earnedAt: b.earnedAt })
+        .onConflictDoNothing()
+    )
+  );
+
+  return earned;
+}
+
 // ── GET /api/me ──────────────────────────────────────────────────────────────
 router.get("/", async (req, res) => {
   try {
@@ -123,7 +248,7 @@ router.get("/", async (req, res) => {
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const db = getDb();
-    const [profile, diagRow, xpRow, sessions] = await Promise.all([
+    const [profile, diagRow, xpRow, sessions, badgeRows] = await Promise.all([
       db.select().from(studentProfiles).where(eq(studentProfiles.clerkUserId, userId)).limit(1),
       db.select().from(diagnosticResults).where(eq(diagnosticResults.userId, userId)).limit(1),
       db.select().from(userXp).where(eq(userXp.userId, userId)).limit(1),
@@ -133,12 +258,19 @@ router.get("/", async (req, res) => {
         .where(eq(practiceSessions.userId, userId))
         .orderBy(desc(practiceSessions.date))
         .limit(100),
+      db.select().from(userBadges).where(eq(userBadges.userId, userId)),
     ]);
 
     const { skillMap, baselineSkillMap } = await readSkillMapForUser(db, userId);
 
     const p = profile[0] ?? null;
     const xp = xpRow[0] ?? null;
+
+    const badges: EarnedBadge[] = badgeRows.map((r) => ({
+      badgeId: r.badgeId,
+      context: r.context,
+      earnedAt: r.earnedAt,
+    }));
 
     res.json({
       profile: p
@@ -160,6 +292,7 @@ router.get("/", async (req, res) => {
         xpEarned: s.xpEarned,
         answers: s.answers ?? [],
       })),
+      badges,
     });
   } catch (e) {
     console.error("GET /api/me error:", e);
@@ -273,9 +406,6 @@ router.put("/skillmap", async (req, res) => {
     const scores = skillMap ?? {};
 
     // updatingBaseline=true ONLY when the caller explicitly supplies baselineSkillMap
-    // (i.e. immediately after a diagnostic). A caller that supplies only skillMap
-    // (e.g. a blended-score update) must go through POST /api/me/sessions, which
-    // uses updatingBaseline=false and never touches baseline_score.
     const hasExplicitBaseline = baselineSkillMap !== undefined && baselineSkillMap !== null;
     const baseline = hasExplicitBaseline ? (baselineSkillMap as SkillMap) : scores;
 
@@ -306,6 +436,7 @@ router.post("/sessions", async (req, res) => {
     if (!id || !date || !subject) return res.status(400).json({ error: "Missing fields" });
 
     const safeScore = Math.max(0, score ?? 0);
+    const safeTotal = Math.max(0, total ?? 0);
     const xpEarned = safeScore * 10 + 20;
 
     const db = getDb();
@@ -327,7 +458,7 @@ router.post("/sessions", async (req, res) => {
         subject,
         topic: topic ?? subject,
         score: safeScore,
-        total: total ?? 0,
+        total: safeTotal,
         xpEarned,
         answers: answers ?? [],
       });
@@ -377,6 +508,25 @@ router.post("/sessions", async (req, res) => {
     const newSkillMap = blendSkillMap(baselineSkillMap, sessions);
     const now = new Date().toISOString();
 
+    // ── Badge evaluation (only for new sessions) ───────────────────────────────
+    let newBadges: EarnedBadge[] = [];
+    if (isNewSession) {
+      const prevSessions = allSessionRows
+        .filter((s) => s.id !== id)
+        .map((s) => ({ score: s.score, total: s.total }));
+
+      newBadges = await computeNewBadges(db, userId, {
+        prevXp: currentXp,
+        newXp: newTotalXp,
+        prevStreak: currentStreak,
+        newStreak: newStreakDays,
+        sessionScore: safeScore,
+        sessionTotal: safeTotal,
+        allSessionCount: allSessionRows.length,
+        prevSessions,
+      });
+    }
+
     await Promise.all([
       db
         .insert(userXp)
@@ -406,6 +556,7 @@ router.post("/sessions", async (req, res) => {
       streakDays: newStreakDays,
       lastPracticeDate: newLastPracticeDate,
       skillMap: newSkillMap,
+      newBadges,
     });
   } catch (e) {
     console.error("POST /api/me/sessions error:", e);

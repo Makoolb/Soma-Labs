@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp, type AnswerRecord } from "@/context/AppContext";
+import { TIER_COLORS, type BadgeDef } from "@shared/badges";
 
 const WEAK_COLORS = [Colors.light.rust, Colors.light.gold, Colors.light.optionC];
 
@@ -29,9 +30,48 @@ function getNextSteps(pct: number, topic: string, isSmartSession: boolean, weakT
   return `Keep going — every expert was once a beginner! Focus on ${topic} basics and try again.`;
 }
 
+function BadgeCelebrationCard({ badge, index }: { badge: BadgeDef; index: number }) {
+  const slideAnim = useRef(new Animated.Value(40)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const delay = index * 180;
+    const timer = setTimeout(() => {
+      Animated.parallel([
+        Animated.spring(slideAnim, { toValue: 0, tension: 70, friction: 8, useNativeDriver: true }),
+        Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+      ]).start();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        styles.badgeCard,
+        { transform: [{ translateY: slideAnim }], opacity: fadeAnim },
+      ]}
+    >
+      <View style={[styles.badgeIconCircle, { backgroundColor: badge.color }]}>
+        <Ionicons name={badge.icon as any} size={26} color="#fff" />
+      </View>
+      <View style={styles.badgeCardText}>
+        <View style={styles.badgeCardNameRow}>
+          <Text style={styles.badgeCardName}>{badge.name}</Text>
+          <View style={[styles.tierPill, { backgroundColor: badge.color + "22", borderColor: badge.color + "55" }]}>
+            <Text style={[styles.tierPillTxt, { color: badge.color }]}>{badge.tier}</Text>
+          </View>
+        </View>
+        <Text style={styles.badgeCardTagline}>{badge.tagline}</Text>
+      </View>
+    </Animated.View>
+  );
+}
+
 export default function ResultsScreen() {
   const insets = useSafeAreaInsets();
-  const { profile, addSession } = useApp();
+  const { profile, addSession, newlyEarnedBadges, clearNewlyEarnedBadges } = useApp();
   const params = useLocalSearchParams<{
     subject: string; topic: string; score: string; total: string;
     answers: string; mode?: string; weakTopics?: string;
@@ -63,6 +103,13 @@ export default function ResultsScreen() {
       addSession({ date: new Date().toISOString(), subject, topic, score, total, answers });
       if (pct >= 70) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
+  }, []);
+
+  // Clear newly earned badges when navigating away
+  useEffect(() => {
+    return () => {
+      clearNewlyEarnedBadges();
+    };
   }, []);
 
   const isExcellent = pct >= 70;
@@ -123,6 +170,23 @@ export default function ResultsScreen() {
               <Text style={styles.breakdownLbl}>XP earned</Text>
             </View>
           </View>
+
+          {/* Badge celebration */}
+          {newlyEarnedBadges.length > 0 && (
+            <View style={styles.badgesSection}>
+              <View style={styles.badgesSectionHeader}>
+                <View style={styles.badgesSectionIcon}>
+                  <Ionicons name="trophy" size={18} color={Colors.light.gold} />
+                </View>
+                <Text style={styles.badgesSectionTitle}>
+                  {newlyEarnedBadges.length === 1 ? "Badge Earned!" : `${newlyEarnedBadges.length} Badges Earned!`}
+                </Text>
+              </View>
+              {newlyEarnedBadges.map((badge, i) => (
+                <BadgeCelebrationCard key={`${badge.id}-${i}`} badge={badge} index={i} />
+              ))}
+            </View>
+          )}
 
           {/* Topic breakdown */}
           {Object.entries(topicBreakdown).length > 1 && (
@@ -233,6 +297,61 @@ const styles = StyleSheet.create({
   },
   breakdownNum: { fontFamily: "Inter_700Bold", fontSize: 26 },
   breakdownLbl: { fontFamily: "Inter_400Regular", fontSize: 11, color: Colors.light.textSecondary, textAlign: "center" },
+
+  // Badge celebration
+  badgesSection: {
+    backgroundColor: Colors.light.card,
+    borderRadius: 20,
+    padding: 16,
+    gap: 12,
+    borderWidth: 2,
+    borderColor: Colors.light.gold + "40",
+  },
+  badgesSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  badgesSectionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.light.gold + "20",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  badgesSectionTitle: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 16,
+    color: Colors.light.navy,
+  },
+  badgeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    backgroundColor: "#F8FAFF",
+    borderRadius: 14,
+    padding: 12,
+  },
+  badgeIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  badgeCardText: { flex: 1, gap: 4 },
+  badgeCardNameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  badgeCardName: { fontFamily: "Inter_700Bold", fontSize: 15, color: Colors.light.navy },
+  tierPill: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderWidth: 1,
+  },
+  tierPillTxt: { fontFamily: "Inter_600SemiBold", fontSize: 11 },
+  badgeCardTagline: { fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary, lineHeight: 18 },
+
   card: { backgroundColor: Colors.light.card, borderRadius: 20, padding: 16, gap: 12 },
   cardTitle: { fontFamily: "Inter_700Bold", fontSize: 15, color: Colors.light.navy },
   divider: { height: 1, backgroundColor: Colors.light.border },
