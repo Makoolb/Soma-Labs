@@ -531,6 +531,9 @@ export function AppProvider({
     const full: SessionResult = { ...session, id };
     const xpGained = full.score * 10 + 20;
 
+    // Clear any stale celebration state before starting the new session sync.
+    setNewlyEarnedBadges([]);
+
     // Optimistic XP update.
     const optimisticXp = totalXP + xpGained;
     setTotalXP(optimisticXp);
@@ -581,19 +584,26 @@ export function AppProvider({
           setSkillMap(resp.skillMap);
           AsyncStorage.setItem(KEYS.SKILL_MAP, JSON.stringify(resp.skillMap)).catch(() => undefined);
         }
-        if (resp.newBadges && resp.newBadges.length > 0) {
-          setBadges((prev) => {
-            const existingKeys = new Set(prev.map((b) => `${b.badgeId}::${b.context}`));
-            const fresh = resp.newBadges!.filter(
-              (b) => !existingKeys.has(`${b.badgeId}::${b.context}`)
-            );
-            return [...prev, ...fresh];
-          });
-          const defs = resp.newBadges
-            .map((b) => BADGE_DEFS.find((d) => d.id === b.badgeId))
-            .filter((d): d is NonNullable<typeof d> => d !== undefined);
-          if (defs.length > 0) {
-            setNewlyEarnedBadges(defs);
+        // Only apply badge awards when a new-badge response arrives for THIS session.
+        // An empty newBadges array is still applied to ensure we always clear any stale defs.
+        if (Array.isArray(resp.newBadges)) {
+          if (resp.newBadges.length > 0) {
+            setBadges((prev) => {
+              const existingKeys = new Set(prev.map((b) => `${b.badgeId}::${b.context}`));
+              const fresh = resp.newBadges!.filter(
+                (b) => !existingKeys.has(`${b.badgeId}::${b.context}`)
+              );
+              return [...prev, ...fresh];
+            });
+            const defs = resp.newBadges
+              .map((b) => BADGE_DEFS.find((d) => d.id === b.badgeId))
+              .filter((d): d is NonNullable<typeof d> => d !== undefined);
+            if (defs.length > 0) {
+              setNewlyEarnedBadges(defs);
+            }
+          } else {
+            // Empty awards — ensure celebration state is cleared for this session.
+            setNewlyEarnedBadges([]);
           }
         }
       }
