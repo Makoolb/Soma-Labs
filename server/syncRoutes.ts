@@ -174,8 +174,8 @@ async function computeNewBadges(
     }
   }
 
-  // sharp_brain — session accuracy >= 80% AND better than previous avg AND at least 3 questions
-  if (sessionTotal >= 3) {
+  // sharp_brain — session accuracy >= 80% AND better than previous average
+  if (sessionTotal > 0) {
     const sessionAcc = sessionScore / sessionTotal;
     if (sessionAcc >= 0.8) {
       const prevAvgAcc =

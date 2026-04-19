@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { ComponentProps, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -12,9 +12,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+
 import Colors from "@/constants/colors";
 import { useApp, type AnswerRecord } from "@/context/AppContext";
 import { TIER_COLORS, type BadgeDef } from "@shared/badges";
+
+type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
 const WEAK_COLORS = [Colors.light.rust, Colors.light.gold, Colors.light.optionC];
 
@@ -54,7 +57,7 @@ function BadgeCelebrationCard({ badge, index }: { badge: BadgeDef; index: number
       ]}
     >
       <View style={[styles.badgeIconCircle, { backgroundColor: badge.color }]}>
-        <Ionicons name={badge.icon as any} size={26} color="#fff" />
+        <Ionicons name={badge.icon as IoniconName} size={26} color="#fff" />
       </View>
       <View style={styles.badgeCardText}>
         <View style={styles.badgeCardNameRow}>

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { ComponentProps, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -19,6 +19,8 @@ import * as Haptics from "expo-haptics";
 import Colors, { OPTION_COLORS } from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
 import { BADGE_DEFS } from "@shared/badges";
+
+type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
 const QUICK_TOPICS = [
   { subject: "maths" as const, topic: "Whole Numbers", icon: "numeric", color: Colors.light.optionB },
@@ -441,7 +443,7 @@ export default function HomeScreen() {
                   <View key={def.id} style={[styles.badgeTile, earned ? styles.badgeTileEarned : styles.badgeTileLocked]}>
                     <View style={[styles.badgeTileIcon, { backgroundColor: earned ? def.color : Colors.light.border }]}>
                       <Ionicons
-                        name={earned ? (def.icon as any) : "lock-closed"}
+                        name={earned ? (def.icon as IoniconName) : "lock-closed"}
                         size={22}
                         color={earned ? "#fff" : Colors.light.textTertiary}
                       />
