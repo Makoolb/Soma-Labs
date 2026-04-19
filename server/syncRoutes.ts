@@ -129,6 +129,7 @@ async function computeNewBadges(
   db: ReturnType<typeof getDb>,
   userId: string,
   opts: {
+    sessionId: string;
     prevXp: number;
     newXp: number;
     prevStreak: number;
@@ -139,7 +140,7 @@ async function computeNewBadges(
     prevSessions: Array<{ score: number; total: number }>;
   }
 ): Promise<EarnedBadge[]> {
-  const { prevXp, newXp, prevStreak, newStreak, sessionScore, sessionTotal, allSessionCount, prevSessions } = opts;
+  const { sessionId, prevXp, newXp, prevStreak, newStreak, sessionScore, sessionTotal, allSessionCount, prevSessions } = opts;
 
   const prevLevel = Math.floor(prevXp / 500) + 1;
   const newLevel = Math.floor(newXp / 500) + 1;
@@ -173,7 +174,7 @@ async function computeNewBadges(
     }
   }
 
-  // sharp_brain — session accuracy >= 80% AND better than previous avg
+  // sharp_brain — session accuracy >= 80% AND better than previous avg AND at least 3 questions
   if (sessionTotal >= 3) {
     const sessionAcc = sessionScore / sessionTotal;
     if (sessionAcc >= 0.8) {
@@ -183,14 +184,15 @@ async function computeNewBadges(
             prevSessions.length
           : 0;
       if (sessionAcc > prevAvgAcc) {
-        candidates.push({ badgeId: "sharp_brain", context: new Date().toISOString().slice(0, 10) });
+        // Use sessionId as context so this badge can be re-earned each qualifying session
+        candidates.push({ badgeId: "sharp_brain", context: `session:${sessionId}` });
       }
     }
   }
 
-  // full_marks — 100% with at least 5 questions
+  // full_marks — 100% with at least 5 questions; re-earnable each qualifying session
   if (sessionTotal >= 5 && sessionScore === sessionTotal) {
-    candidates.push({ badgeId: "full_marks", context: new Date().toISOString().slice(0, 10) });
+    candidates.push({ badgeId: "full_marks", context: `session:${sessionId}` });
   }
 
   if (candidates.length === 0) return [];
@@ -516,6 +518,7 @@ router.post("/sessions", async (req, res) => {
         .map((s) => ({ score: s.score, total: s.total }));
 
       newBadges = await computeNewBadges(db, userId, {
+        sessionId: id,
         prevXp: currentXp,
         newXp: newTotalXp,
         prevStreak: currentStreak,

@@ -432,7 +432,7 @@ export default function HomeScreen() {
                 <View style={[styles.sectionAccent, { backgroundColor: Colors.light.gold }]} />
                 <Text style={styles.sectionTitle}>My Badges</Text>
               </View>
-              <Text style={styles.badgeCount}>{badges.length}/{BADGE_DEFS.length}</Text>
+              <Text style={styles.badgeCount}>{new Set(badges.map((b) => b.badgeId)).size}/{BADGE_DEFS.length}</Text>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.badgesRow}>
               {BADGE_DEFS.map((def) => {
