@@ -1,0 +1,26 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "CBPKul9RBH2d6B1kplTo2"
+uri = "file://assets/images/icon.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "Qxq5T63i-fbbpEz-AWJFK"
+uri = "file://assets/images/android-icon-monochrome.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "JkUiqDqWdHMBGsa8poDHM"
+uri = "file://assets/images/android-icon-background.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "zxe7la4m2j2vBAPwiqXDS"
+uri = "file://assets/images/android-icon-foreground.png"
+type = "image"
+title = "generated_image"
