@@ -8,7 +8,7 @@ import {
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { View, Text, StyleSheet, Modal, TouchableOpacity } from "react-native";
@@ -17,25 +17,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { AppProvider, useApp } from "@/context/AppContext";
-import { ClerkProvider, useAuth } from "@clerk/clerk-expo";
-import * as SecureStore from "expo-secure-store";
+import { supabase } from "@/lib/supabase";
+import type { Session } from "@supabase/supabase-js";
 import Colors from "@/constants/colors";
 
 SplashScreen.preventAutoHideAsync();
-
-const PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
-
-const tokenCache = {
-  async getToken(key: string) {
-    return SecureStore.getItemAsync(key);
-  },
-  async saveToken(key: string, value: string) {
-    return SecureStore.setItemAsync(key, value);
-  },
-  async clearToken(key: string) {
-    return SecureStore.deleteItemAsync(key);
-  },
-};
 
 function RootLayoutNav() {
   return (
@@ -128,14 +114,35 @@ function AppContent() {
   );
 }
 
-function ClerkAuthRoot() {
-  const { getToken, isSignedIn, isLoaded, userId } = useAuth();
+function SupabaseAuthRoot() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [isAuthLoaded, setIsAuthLoaded] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setIsAuthLoaded(true);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setIsAuthLoaded(true);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const getToken = async () => {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
+  };
+
   return (
     <AppProvider
       getToken={getToken}
-      isSignedIn={isSignedIn ?? false}
-      isAuthLoaded={isLoaded}
-      userId={userId ?? null}
+      isSignedIn={!!session}
+      isAuthLoaded={isAuthLoaded}
+      userId={session?.user?.id ?? null}
     >
       <AppContent />
     </AppProvider>
@@ -151,7 +158,9 @@ function ConfigurationRequiredScreen() {
       <Text style={cfgStyles.title}>Auth not configured</Text>
       <Text style={cfgStyles.body}>
         Set{" "}
-        <Text style={cfgStyles.code}>EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY</Text>
+        <Text style={cfgStyles.code}>EXPO_PUBLIC_SUPABASE_URL</Text>
+        {" "}and{" "}
+        <Text style={cfgStyles.code}>EXPO_PUBLIC_SUPABASE_ANON_KEY</Text>
         {" "}in Replit Secrets to enable sign-in.
       </Text>
     </View>
@@ -248,7 +257,10 @@ export default function RootLayout() {
 
   if (!fontsLoaded && !fontError) return null;
 
-  if (!PUBLISHABLE_KEY) {
+  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
     return (
       <ErrorBoundary>
         <ConfigurationRequiredScreen />
@@ -259,9 +271,7 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <ClerkProvider publishableKey={PUBLISHABLE_KEY} tokenCache={tokenCache}>
-          <ClerkAuthRoot />
-        </ClerkProvider>
+        <SupabaseAuthRoot />
       </QueryClientProvider>
     </ErrorBoundary>
   );

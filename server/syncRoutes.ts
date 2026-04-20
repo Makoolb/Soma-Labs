@@ -1,5 +1,5 @@
-import { Router } from "express";
-import { clerkMiddleware, requireAuth, getAuth } from "@clerk/express";
+import { Router, Request, Response, NextFunction } from "express";
+import { createClient } from "@supabase/supabase-js";
 import { getDb } from "./db";
 import {
   studentProfiles,
@@ -9,13 +9,49 @@ import {
   practiceSessions,
   userBadges,
 } from "@shared/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { BADGE_DEFS, type EarnedBadge } from "@shared/badges";
 
 const router = Router();
 
-router.use(clerkMiddleware());
-router.use(requireAuth());
+// ── Supabase admin client for server-side JWT verification ───────────────────
+// Lazy-initialized so the server can start even before secrets are set.
+let _supabaseAdmin: ReturnType<typeof createClient> | null = null;
+function getSupabaseAdmin() {
+  if (!_supabaseAdmin) {
+    const url = process.env.SUPABASE_URL ?? "";
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+    if (!url || !key) throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in Replit Secrets");
+    _supabaseAdmin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+  }
+  return _supabaseAdmin;
+}
+
+// ── Auth middleware — replaces clerkMiddleware() + requireAuth() ─────────────
+async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const token = authHeader.slice(7);
+  const { data: { user }, error } = await getSupabaseAdmin().auth.getUser(token);
+
+  if (error || !user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  // Attach userId to request — same interface as Clerk's getAuth(req)
+  (req as any).userId = user.id;
+  next();
+}
+
+router.use(requireAuth);
+
+// ── Helper: read userId off request ─────────────────────────────────────────
+function getUserId(req: Request): string {
+  return (req as any).userId as string;
+}
 
 // ── Shared types ─────────────────────────────────────────────────────────────
 
@@ -34,7 +70,6 @@ interface SessionForBlend {
   answers: AnswerRecord[];
 }
 
-// Mirrors the client-side blendSkillMap — practiceWeight = min(0.7, firstAttemptCount / 14).
 function blendSkillMap(baseline: SkillMap, sessions: SessionForBlend[]): SkillMap {
   const sorted = [...sessions].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
@@ -147,57 +182,36 @@ async function computeNewBadges(
 
   const candidates: BadgeCandidate[] = [];
 
-  // boldface — first session ever
-  if (allSessionCount === 1) {
-    candidates.push({ badgeId: "boldface", context: "" });
-  }
+  if (allSessionCount === 1) candidates.push({ badgeId: "boldface", context: "" });
+  if (newStreak >= 5 && prevStreak < 5) candidates.push({ badgeId: "steady_steady", context: "" });
+  if (newStreak >= 10 && prevStreak < 10) candidates.push({ badgeId: "double_steady", context: "" });
+  if (newStreak >= 30 && prevStreak < 30) candidates.push({ badgeId: "iron_naija", context: "" });
 
-  // steady_steady — streak first hits 5
-  if (newStreak >= 5 && prevStreak < 5) {
-    candidates.push({ badgeId: "steady_steady", context: "" });
-  }
-
-  // double_steady — streak first hits 10
-  if (newStreak >= 10 && prevStreak < 10) {
-    candidates.push({ badgeId: "double_steady", context: "" });
-  }
-
-  // iron_naija — streak first hits 30
-  if (newStreak >= 30 && prevStreak < 30) {
-    candidates.push({ badgeId: "iron_naija", context: "" });
-  }
-
-  // better_beta — per-level award
   if (newLevel > prevLevel) {
     for (let lvl = prevLevel + 1; lvl <= newLevel; lvl++) {
       candidates.push({ badgeId: "better_beta", context: `level:${lvl}` });
     }
   }
 
-  // sharp_brain — session accuracy >= 80% AND better than previous average
   if (sessionTotal > 0) {
     const sessionAcc = sessionScore / sessionTotal;
     if (sessionAcc >= 0.8) {
       const prevAvgAcc =
         prevSessions.length > 0
-          ? prevSessions.reduce((sum, s) => sum + (s.total > 0 ? s.score / s.total : 0), 0) /
-            prevSessions.length
+          ? prevSessions.reduce((sum, s) => sum + (s.total > 0 ? s.score / s.total : 0), 0) / prevSessions.length
           : 0;
       if (sessionAcc > prevAvgAcc) {
-        // Use sessionId as context so this badge can be re-earned each qualifying session
         candidates.push({ badgeId: "sharp_brain", context: `session:${sessionId}` });
       }
     }
   }
 
-  // full_marks — 100% with at least 5 questions; re-earnable each qualifying session
   if (sessionTotal >= 5 && sessionScore === sessionTotal) {
     candidates.push({ badgeId: "full_marks", context: `session:${sessionId}` });
   }
 
   if (candidates.length === 0) return [];
 
-  // Filter out already-earned once-only badges
   const onceOnlyIds = ["boldface", "steady_steady", "double_steady", "iron_naija"];
   const onceOnlyCandidates = candidates.filter((c) => onceOnlyIds.includes(c.badgeId));
   const reEarnableCandidates = candidates.filter((c) => !onceOnlyIds.includes(c.badgeId));
@@ -211,7 +225,6 @@ async function computeNewBadges(
     alreadyEarned = rows;
   }
 
-  // For better_beta, also check per-context
   const earnedKeys = new Set(alreadyEarned.map((r) => `${r.badgeId}::${r.context}`));
 
   const toAward: BadgeCandidate[] = [
@@ -246,10 +259,9 @@ async function computeNewBadges(
 // ── GET /api/me ──────────────────────────────────────────────────────────────
 router.get("/", async (req, res) => {
   try {
-    const { userId } = getAuth(req);
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-
+    const userId = getUserId(req);
     const db = getDb();
+
     const [profile, diagRow, xpRow, sessions, badgeRows] = await Promise.all([
       db.select().from(studentProfiles).where(eq(studentProfiles.clerkUserId, userId)).limit(1),
       db.select().from(diagnosticResults).where(eq(diagnosticResults.userId, userId)).limit(1),
@@ -305,9 +317,7 @@ router.get("/", async (req, res) => {
 // ── GET /api/me/sessions ─────────────────────────────────────────────────────
 router.get("/sessions", async (req, res) => {
   try {
-    const { userId } = getAuth(req);
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-
+    const userId = getUserId(req);
     const db = getDb();
     const sessions = await db
       .select()
@@ -337,9 +347,7 @@ router.get("/sessions", async (req, res) => {
 // ── PUT /api/me/profile ───────────────────────────────────────────────────────
 router.put("/profile", async (req, res) => {
   try {
-    const { userId } = getAuth(req);
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-
+    const userId = getUserId(req);
     const { name, grade, subject, examDate } = req.body as {
       name?: string;
       grade?: string;
@@ -349,6 +357,7 @@ router.put("/profile", async (req, res) => {
     if (!name || !grade || !subject) return res.status(400).json({ error: "Missing fields" });
 
     const db = getDb();
+    // NOTE: clerkUserId column stores the user ID (Supabase UUID now, same interface)
     await db
       .insert(studentProfiles)
       .values({ clerkUserId: userId, name, grade, subject, examDate: examDate ?? null, createdAt: new Date().toISOString() })
@@ -357,7 +366,6 @@ router.put("/profile", async (req, res) => {
         set: { name, grade, subject, examDate: examDate ?? null },
       });
 
-    // Ensure user_xp row exists for this user
     await db.insert(userXp).values({ userId, updatedAt: new Date().toISOString() }).onConflictDoNothing();
 
     res.json({ ok: true });
@@ -370,9 +378,7 @@ router.put("/profile", async (req, res) => {
 // ── PUT /api/me/diagnostic ────────────────────────────────────────────────────
 router.put("/diagnostic", async (req, res) => {
   try {
-    const { userId } = getAuth(req);
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-
+    const userId = getUserId(req);
     const { diagnosticResult } = req.body as { diagnosticResult?: unknown };
     if (!diagnosticResult) return res.status(400).json({ error: "Missing diagnosticResult" });
 
@@ -393,12 +399,9 @@ router.put("/diagnostic", async (req, res) => {
 });
 
 // ── PUT /api/me/skillmap ──────────────────────────────────────────────────────
-// Called after diagnostic: sets both score and baseline_score for each topic.
 router.put("/skillmap", async (req, res) => {
   try {
-    const { userId } = getAuth(req);
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-
+    const userId = getUserId(req);
     const { skillMap, baselineSkillMap } = req.body as {
       skillMap?: SkillMap;
       baselineSkillMap?: SkillMap;
@@ -406,13 +409,10 @@ router.put("/skillmap", async (req, res) => {
 
     const db = getDb();
     const scores = skillMap ?? {};
-
-    // updatingBaseline=true ONLY when the caller explicitly supplies baselineSkillMap
     const hasExplicitBaseline = baselineSkillMap !== undefined && baselineSkillMap !== null;
     const baseline = hasExplicitBaseline ? (baselineSkillMap as SkillMap) : scores;
 
     await upsertSkillTopics(db, userId, scores, baseline, hasExplicitBaseline);
-
     res.json({ ok: true });
   } catch (e) {
     console.error("PUT /api/me/skillmap error:", e);
@@ -423,9 +423,7 @@ router.put("/skillmap", async (req, res) => {
 // ── POST /api/me/sessions ─────────────────────────────────────────────────────
 router.post("/sessions", async (req, res) => {
   try {
-    const { userId } = getAuth(req);
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-
+    const userId = getUserId(req);
     const { id, date, subject, topic, score, total, answers } = req.body as {
       id?: string;
       date?: string;
@@ -443,7 +441,6 @@ router.post("/sessions", async (req, res) => {
 
     const db = getDb();
 
-    // ── Idempotency check ──────────────────────────────────────────────────────
     const existing = await db
       .select({ id: practiceSessions.id })
       .from(practiceSessions)
@@ -466,7 +463,6 @@ router.post("/sessions", async (req, res) => {
       });
     }
 
-    // ── Read current XP + skill-map rows ──────────────────────────────────────
     const [xpRow, { baselineSkillMap }] = await Promise.all([
       db.select().from(userXp).where(eq(userXp.userId, userId)).limit(1).then((r) => r[0]),
       readSkillMapForUser(db, userId),
@@ -476,7 +472,6 @@ router.post("/sessions", async (req, res) => {
     const currentStreak = xpRow?.streakDays ?? 0;
     const lastPracticeDate = xpRow?.lastPracticeDate ?? null;
 
-    // ── Compute XP + streak (only for new sessions) ────────────────────────────
     let newTotalXp = currentXp;
     let newStreakDays = currentStreak;
     let newLastPracticeDate = lastPracticeDate;
@@ -510,7 +505,6 @@ router.post("/sessions", async (req, res) => {
     const newSkillMap = blendSkillMap(baselineSkillMap, sessions);
     const now = new Date().toISOString();
 
-    // ── Badge evaluation (only for new sessions) ───────────────────────────────
     let newBadges: EarnedBadge[] = [];
     if (isNewSession) {
       const prevSessions = allSessionRows
@@ -533,21 +527,10 @@ router.post("/sessions", async (req, res) => {
     await Promise.all([
       db
         .insert(userXp)
-        .values({
-          userId,
-          totalXp: newTotalXp,
-          streakDays: newStreakDays,
-          lastPracticeDate: newLastPracticeDate,
-          updatedAt: now,
-        })
+        .values({ userId, totalXp: newTotalXp, streakDays: newStreakDays, lastPracticeDate: newLastPracticeDate, updatedAt: now })
         .onConflictDoUpdate({
           target: userXp.userId,
-          set: {
-            totalXp: newTotalXp,
-            streakDays: newStreakDays,
-            lastPracticeDate: newLastPracticeDate,
-            updatedAt: now,
-          },
+          set: { totalXp: newTotalXp, streakDays: newStreakDays, lastPracticeDate: newLastPracticeDate, updatedAt: now },
         }),
       upsertSkillTopics(db, userId, newSkillMap, {}, false),
     ]);
@@ -568,12 +551,9 @@ router.post("/sessions", async (req, res) => {
 });
 
 // ── POST /api/me/recompute ────────────────────────────────────────────────────
-// Recomputes XP, streak, and skill-map from stored server data — no client values accepted.
 router.post("/recompute", async (req, res) => {
   try {
-    const { userId } = getAuth(req);
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-
+    const userId = getUserId(req);
     const db = getDb();
     const allSessions = await db
       .select()
@@ -599,11 +579,8 @@ router.post("/recompute", async (req, res) => {
         const prev = new Date(days[i - 1]);
         const curr = new Date(days[i]);
         const diffDays = Math.round((prev.getTime() - curr.getTime()) / 86_400_000);
-        if (diffDays === 1) {
-          streakDays++;
-        } else {
-          break;
-        }
+        if (diffDays === 1) streakDays++;
+        else break;
       }
     }
 

@@ -13,14 +13,13 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp, type SessionResult, type SkillMap } from "@/context/AppContext";
-import { useAuth } from "@clerk/clerk-expo";
+import { supabase } from "@/lib/supabase";
 
 // Total questions available per grade in the practice bank
 const QUESTIONS_BY_GRADE: Record<string, number> = { P4: 81, P5: 74, P6: 51 };
 
 // ---- computation helpers ----
 
-/** Top topics by first-attempt accuracy (deduplicated by questionId, oldest session first). */
 function getFirstAttemptAccuracy(sessions: SessionResult[]) {
   const sorted = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const seen = new Set<string>();
@@ -41,7 +40,6 @@ function getFirstAttemptAccuracy(sessions: SessionResult[]) {
     .sort((a, b) => b.pct - a.pct);
 }
 
-/** Weakest topics from the diagnostic SkillMap (lowest % first). */
 function getFocusAreas(skillMap: SkillMap | null, n = 3): { topic: string; pct: number }[] {
   if (!skillMap) return [];
   return Object.entries(skillMap)
@@ -108,7 +106,6 @@ export default function ParentDashboard() {
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const { profile, sessions, streakDays, totalXP, skillMap } = useApp();
-  const { signOut } = useAuth();
   const [copied, setCopied] = useState(false);
 
   const level = Math.floor(totalXP / 500) + 1;
@@ -133,7 +130,6 @@ export default function ParentDashboard() {
       })()
     : null;
 
-  // ---- WhatsApp report text ----
   function buildReportText(): string {
     const name = profile?.name ?? "Your child";
     const grade = profile?.grade ?? "";
@@ -146,24 +142,20 @@ export default function ParentDashboard() {
       `✅ Problems solved this week: ${weekProblems}`,
       `📚 Total problems solved: ${totalProblems}`,
     ];
-
     if (strengthAreas.length > 0) {
       lines.push(``, `💪 *Strength Areas*`);
       strengthAreas.forEach((a) => lines.push(`• ${a.topic} — ${a.pct}%`));
     }
-
     if (focusAreas.length > 0) {
       lines.push(``, `📌 *Focus Areas (needs practice)*`);
       focusAreas.forEach((a) => lines.push(`• ${a.topic} — ${a.pct}% skill score`));
     }
-
     if (status) {
       const meta = STATUS_META[status.label];
       lines.push(``, `📈 *Status: ${meta.label}*`);
       lines.push(`Coverage: ${status.actualPct}% of ${profile?.grade} questions attempted`);
       if (examLabel) lines.push(`Exam: ${examLabel}`);
     }
-
     lines.push(``, `Keep encouraging ${name}'s daily practice! 🌟`);
     return lines.join("\n");
   }
@@ -180,6 +172,13 @@ export default function ParentDashboard() {
     } else {
       await Share.share({ message: text });
     }
+  }
+
+  async function handleSignOut() {
+    Haptics.selectionAsync();
+    await supabase.auth.signOut();
+    // onAuthStateChange in _layout.tsx fires, sets session to null,
+    // AppProvider updates isSignedIn → AuthGuard redirects to /auth
   }
 
   const noData = sessions.length === 0;
@@ -256,8 +255,6 @@ export default function ParentDashboard() {
                     <Text style={styles.statusExam}>Exam: {examLabel}</Text>
                   )}
                 </View>
-
-                {/* Progress bar — actual coverage only */}
                 <View style={styles.progressRow}>
                   <View style={styles.progressTrack}>
                     <View
@@ -274,7 +271,6 @@ export default function ParentDashboard() {
                     {status.actualPct}%
                   </Text>
                 </View>
-
                 <Text style={styles.statusDetail}>
                   {status.attempted} of {status.totalAvailable} questions attempted for {profile?.grade}
                 </Text>
@@ -361,7 +357,6 @@ export default function ParentDashboard() {
             </View>
           )}
 
-          {/* ── Encouragement footer ── */}
           <View style={styles.encourageCard}>
             <Ionicons name="heart" size={20} color={Colors.light.rust} />
             <Text style={styles.encourageTxt}>
@@ -371,7 +366,6 @@ export default function ParentDashboard() {
             </Text>
           </View>
 
-          {/* ── Share button ── */}
           <TouchableOpacity style={styles.shareBtn} onPress={handleShare} activeOpacity={0.88}>
             <Ionicons name={copied ? "checkmark" : "share-social"} size={20} color="#fff" />
             <Text style={styles.shareBtnTxt}>
@@ -388,7 +382,7 @@ export default function ParentDashboard() {
       <View style={styles.accountSection}>
         <TouchableOpacity
           style={styles.signOutBtn}
-          onPress={() => { Haptics.selectionAsync(); signOut(); }}
+          onPress={handleSignOut}
           activeOpacity={0.8}
         >
           <Ionicons name="log-out-outline" size={18} color={Colors.light.rust} />
@@ -405,63 +399,31 @@ export default function ParentDashboard() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.light.background },
   content: { paddingHorizontal: 16, gap: 16 },
-
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   headerTitle: { fontFamily: "Inter_700Bold", fontSize: 24, color: Colors.light.navy },
   headerSub: { fontFamily: "Inter_400Regular", fontSize: 14, color: Colors.light.textSecondary, marginTop: 2 },
-  gradeBadge: {
-    backgroundColor: Colors.light.navy, borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 6,
-  },
+  gradeBadge: { backgroundColor: Colors.light.navy, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6 },
   gradeBadgeTxt: { fontFamily: "Inter_700Bold", fontSize: 14, color: "#fff" },
-
-  emptyCard: {
-    backgroundColor: Colors.light.card, borderRadius: 22, padding: 32,
-    alignItems: "center", gap: 12,
-  },
+  emptyCard: { backgroundColor: Colors.light.card, borderRadius: 22, padding: 32, alignItems: "center", gap: 12 },
   emptyTitle: { fontFamily: "Inter_700Bold", fontSize: 18, color: Colors.light.navy },
-  emptySub: {
-    fontFamily: "Inter_400Regular", fontSize: 14,
-    color: Colors.light.textSecondary, textAlign: "center", lineHeight: 22,
-  },
-
+  emptySub: { fontFamily: "Inter_400Regular", fontSize: 14, color: Colors.light.textSecondary, textAlign: "center", lineHeight: 22 },
   statsRow: { flexDirection: "row", gap: 8 },
-  statCard: {
-    flex: 1, backgroundColor: Colors.light.card, borderRadius: 16, padding: 10,
-    alignItems: "center", gap: 4, borderTopWidth: 3,
-  },
+  statCard: { flex: 1, backgroundColor: Colors.light.card, borderRadius: 16, padding: 10, alignItems: "center", gap: 4, borderTopWidth: 3 },
   statNum: { fontFamily: "Inter_700Bold", fontSize: 15, color: Colors.light.navy, textAlign: "center" },
   statLbl: { fontFamily: "Inter_400Regular", fontSize: 10, color: Colors.light.textSecondary, textAlign: "center" },
-
   section: { gap: 10 },
   sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 17, color: Colors.light.navy },
-
-  statusCard: {
-    backgroundColor: Colors.light.card, borderRadius: 20, padding: 16, gap: 14, borderLeftWidth: 5,
-  },
+  statusCard: { backgroundColor: Colors.light.card, borderRadius: 20, padding: 16, gap: 14, borderLeftWidth: 5 },
   statusHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   statusLabel: { fontFamily: "Inter_700Bold", fontSize: 18, flex: 1 },
   statusExam: { fontFamily: "Inter_400Regular", fontSize: 12, color: Colors.light.textSecondary },
-
   progressRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  progressTrack: {
-    flex: 1, height: 12, backgroundColor: Colors.light.border, borderRadius: 6, overflow: "hidden",
-  },
+  progressTrack: { flex: 1, height: 12, backgroundColor: Colors.light.border, borderRadius: 6, overflow: "hidden" },
   progressFill: { height: "100%", borderRadius: 6 },
   progressPct: { fontFamily: "Inter_700Bold", fontSize: 13, width: 38, textAlign: "right" },
-  statusDetail: {
-    fontFamily: "Inter_400Regular", fontSize: 12, color: Colors.light.textSecondary,
-  },
-
-  noStatusCard: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    backgroundColor: Colors.light.card, borderRadius: 16, padding: 16,
-    borderWidth: 2, borderColor: Colors.light.border, borderStyle: "dashed",
-  },
-  noStatusTxt: {
-    fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary, flex: 1,
-  },
-
+  statusDetail: { fontFamily: "Inter_400Regular", fontSize: 12, color: Colors.light.textSecondary },
+  noStatusCard: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.light.card, borderRadius: 16, padding: 16, borderWidth: 2, borderColor: Colors.light.border, borderStyle: "dashed" },
+  noStatusTxt: { fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary, flex: 1 },
   areaCard: { backgroundColor: Colors.light.card, borderRadius: 20, padding: 16, gap: 12 },
   areaRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   areaRank: { width: 28, height: 28, borderRadius: 8, justifyContent: "center", alignItems: "center" },
@@ -473,40 +435,16 @@ const styles = StyleSheet.create({
   areaPct: { fontFamily: "Inter_700Bold", fontSize: 14, width: 42, textAlign: "right" },
   areaHint: { fontFamily: "Inter_400Regular", fontSize: 12, color: Colors.light.textSecondary },
   divider: { height: 1, backgroundColor: Colors.light.border },
-
   noAccuracyCard: { backgroundColor: Colors.light.card, borderRadius: 16, padding: 16 },
-  noAccuracyTxt: {
-    fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary, lineHeight: 20,
-  },
-
-  encourageCard: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    backgroundColor: Colors.light.card, borderRadius: 18, padding: 16,
-    borderWidth: 2, borderColor: Colors.light.border,
-  },
+  noAccuracyTxt: { fontFamily: "Inter_400Regular", fontSize: 13, color: Colors.light.textSecondary, lineHeight: 20 },
+  encourageCard: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.light.card, borderRadius: 18, padding: 16, borderWidth: 2, borderColor: Colors.light.border },
   encourageTxt: { fontFamily: "Inter_500Medium", fontSize: 15, color: Colors.light.text, flex: 1 },
   encourageName: { fontFamily: "Inter_700Bold", color: Colors.light.navy },
-
-  shareBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 10, backgroundColor: Colors.light.navy, borderRadius: 18, paddingVertical: 18,
-  },
+  shareBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: Colors.light.navy, borderRadius: 18, paddingVertical: 18 },
   shareBtnTxt: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#fff" },
-  shareNote: {
-    fontFamily: "Inter_400Regular", fontSize: 12,
-    color: Colors.light.textSecondary, textAlign: "center", marginTop: -8,
-  },
-
+  shareNote: { fontFamily: "Inter_400Regular", fontSize: 12, color: Colors.light.textSecondary, textAlign: "center", marginTop: -8 },
   accountSection: { gap: 10, paddingTop: 8 },
-  signOutBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    borderWidth: 2, borderColor: Colors.light.rust + "40",
-    borderRadius: 16, paddingVertical: 16,
-    backgroundColor: Colors.light.rust + "08",
-  },
+  signOutBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 2, borderColor: Colors.light.rust + "40", borderRadius: 16, paddingVertical: 16, backgroundColor: Colors.light.rust + "08" },
   signOutTxt: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: Colors.light.rust },
-  signOutNote: {
-    fontFamily: "Inter_400Regular", fontSize: 12,
-    color: Colors.light.textSecondary, textAlign: "center", lineHeight: 18,
-  },
+  signOutNote: { fontFamily: "Inter_400Regular", fontSize: 12, color: Colors.light.textSecondary, textAlign: "center", lineHeight: 18 },
 });
