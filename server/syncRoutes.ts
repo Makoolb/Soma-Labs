@@ -259,7 +259,7 @@ router.get("/", async (req, res) => {
         .from(practiceSessions)
         .where(eq(practiceSessions.userId, userId))
         .orderBy(desc(practiceSessions.date))
-        .limit(100),
+        .limit(20),
       db.select().from(userBadges).where(eq(userBadges.userId, userId)),
     ]);
 

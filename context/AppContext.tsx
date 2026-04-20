@@ -174,7 +174,11 @@ export function AppProvider({
   const [streakDays, setStreakDays] = useState(0);
   const [totalXP, setTotalXP] = useState(0);
   const [storageLoading, setStorageLoading] = useState(true);
-  const [isHydrating, setIsHydrating] = useState(false);
+  // serverProfilePending is true only when the user is signed-in but we have no local
+  // profile yet, meaning we must wait for the server before routing (otherwise the app
+  // would incorrectly redirect a returning user to onboarding). For returning users who
+  // already have a cached profile, this stays false — they see their data immediately.
+  const [serverProfilePending, setServerProfilePending] = useState(false);
   const [pendingMigration, setPendingMigration] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [badges, setBadges] = useState<EarnedBadge[]>([]);
@@ -184,7 +188,9 @@ export function AppProvider({
   // null = "signed out" so initial state never triggers clearAll on mount
   const prevUserIdRef = useRef<string | null>(null);
 
-  const isLoading = storageLoading || !isAuthLoaded || isHydrating || pendingMigration;
+  // serverProfilePending is the only server-wait that blocks the UI.
+  // Returning users with cached data skip it entirely and see their content immediately.
+  const isLoading = storageLoading || !isAuthLoaded || serverProfilePending || pendingMigration;
 
   useEffect(() => {
     baselineRef.current = baselineSkillMap;
@@ -210,14 +216,24 @@ export function AppProvider({
       return;
     }
 
-    setIsHydrating(true);
+    // Block the loading gate only when there is no cached profile to show yet.
+    // This covers two cases:
+    //   • Fresh install / cleared storage: profile === null, must wait for server
+    //     to know whether to route to onboarding or the main app.
+    //   • Account switch (prevUserId !== null): old user's profile is stale;
+    //     we are about to clearAll(), so we must wait for the new profile.
+    const needsServerBeforeRouting = prevUserId !== null || profile === null;
+    if (needsServerBeforeRouting) {
+      setServerProfilePending(true);
+    }
 
     const doHydrate: Promise<void> =
       prevUserId !== null
         ? clearAll().then(() => hydrateFromServer(false))
         : hydrateFromServer(true);
 
-    doHydrate.catch(() => undefined).finally(() => setIsHydrating(false));
+    // Hydration runs in the background. Release the routing gate regardless of success.
+    doHydrate.catch(() => undefined).finally(() => setServerProfilePending(false));
   }, [userId, isAuthLoaded, storageLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Storage helpers ─────────────────────────────────────────────────────────
